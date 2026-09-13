@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Section from "@/components/Section";
 import Sidebar from "@/components/Sidebar";
 import { formatDuration } from "@/components/Timer";
+import { useSyncedSection } from "@/components/useSyncedSection";
 import type { Assessment } from "@/types/assessment";
 
 const TOTAL_DURATION_MS = 15 * 60 * 1000;
@@ -34,7 +35,7 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
   const [assessmentEndAt, setAssessmentEndAt] = useState<number | null>(null);
   const [mainAnswerStartedAt, setMainAnswerStartedAt] = useState<number | null>(null);
   const [mainAnswerDuration, setMainAnswerDuration] = useState<number | null>(null);
-  const [activeSection, setActiveSection] = useState("summary");
+  const { activeSection, setActiveSection, externalSection, clearExternalSection, syncReady } = useSyncedSection("summary");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const summaryRef = useRef<HTMLElement | null>(null);
 
@@ -93,6 +94,8 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
   }, []);
 
   useEffect(() => {
+    if (!syncReady || externalSection) return;
+
     const elements = [summaryRef.current, ...assessment.sections.map((section) => sectionRefs.current[section.id])].filter(
       (element): element is HTMLElement => element !== null
     );
@@ -113,7 +116,7 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
       const atDocumentEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
       if (atDocumentEnd) currentId = elements[elements.length - 1].id;
 
-      setActiveSection((current) => (current === currentId ? current : currentId));
+      setActiveSection(currentId);
     };
 
     window.addEventListener("scroll", updateCurrentSection, { passive: true });
@@ -124,7 +127,14 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
       window.removeEventListener("scroll", updateCurrentSection);
       window.removeEventListener("resize", updateCurrentSection);
     };
-  }, [assessment.sections]);
+  }, [assessment.sections, externalSection, setActiveSection, syncReady]);
+
+  useEffect(() => {
+    if (!externalSection) return;
+
+    document.getElementById(externalSection)?.scrollIntoView({ behavior: "auto", block: "start" });
+    clearExternalSection();
+  }, [clearExternalSection, externalSection]);
 
   function startAssessment() {
     const startedAt = Date.now();
@@ -175,7 +185,7 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
   }
 
   function navigateTo(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById(id)?.scrollIntoView({ behavior: "auto", block: "start" });
     setActiveSection(id);
   }
 

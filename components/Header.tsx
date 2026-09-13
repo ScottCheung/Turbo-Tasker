@@ -32,6 +32,14 @@ export default function Header({
             <Timer milliseconds={totalRemaining} className="text-[clamp(1.55rem,1.25rem+0.75vw,2.25rem)] font-semibold text-ink" />
           </div>
           <div className="hidden items-center gap-2 border-l border-line pl-4 md:flex">
+            <a
+              href="/speaking-notes"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md px-2.5 py-2 text-[clamp(0.78rem,0.7rem+0.15vw,0.95rem)] text-muted transition-colors hover:bg-slate-100 hover:text-ink"
+            >
+              Speaking notes
+            </a>
             {!assessmentStarted || canStartMainAnswer ? (
               <button
                 type="button"
@@ -55,6 +63,14 @@ export default function Header({
       </div>
 
       <div className="flex gap-2 overflow-x-auto border-t border-slate-100 px-5 py-2 md:hidden">
+        <a
+          href="/speaking-notes"
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 rounded-md px-3 py-2 text-[clamp(0.78rem,0.7rem+0.15vw,0.95rem)] text-muted"
+        >
+          Speaking notes
+        </a>
         {!assessmentStarted || canStartMainAnswer ? (
           <button
             type="button"

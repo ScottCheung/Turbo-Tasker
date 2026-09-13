@@ -4,7 +4,8 @@ type SidebarProps = {
   sections: AssessmentSection[];
   activeSection: string;
   sectionProgress: number;
-  sectionProgressById: ReadonlyMap<string, number>;
+  sectionProgressById?: ReadonlyMap<string, number>;
+  showProgress?: boolean;
   onNavigate: (id: string) => void;
 };
 
@@ -13,6 +14,7 @@ export default function Sidebar({
   activeSection,
   sectionProgress,
   sectionProgressById,
+  showProgress = true,
   onNavigate
 }: SidebarProps) {
   return (
@@ -40,7 +42,11 @@ export default function Sidebar({
               key={section.id}
               onClick={() => onNavigate(section.id)}
               aria-current={activeSection === section.id ? "location" : undefined}
-              aria-label={`${section.title}, ${Math.round(sectionProgressById.get(section.id) ?? 0)}% time remaining`}
+              aria-label={
+                showProgress
+                  ? `${section.title}, ${Math.round(sectionProgressById?.get(section.id) ?? 0)}% time remaining`
+                  : section.title
+              }
               className={`flex shrink-0 flex-col items-stretch gap-1.5 rounded-md px-3 py-2.5 text-left text-[clamp(0.95rem,0.82rem+0.25vw,1.15rem)] transition-colors lg:w-full ${
                 activeSection === section.id
                   ? "bg-accent-soft font-semibold text-accent"
@@ -51,32 +57,36 @@ export default function Sidebar({
                 <span className="w-5 shrink-0 font-mono text-[clamp(0.68rem,0.6rem+0.1vw,0.78rem)] text-slate-400">{String(index + 1).padStart(2, "0")}</span>
                 <span className="min-w-0">{section.title}</span>
               </span>
-              <span className="block h-1 w-full overflow-hidden rounded-full bg-slate-200/80" aria-hidden="true">
-                <span
-                  className="block h-full rounded-full bg-accent transition-[width] duration-700"
-                  style={{ width: `${sectionProgressById.get(section.id) ?? 0}%` }}
-                />
-              </span>
+              {showProgress ? (
+                <span className="block h-1 w-full overflow-hidden rounded-full bg-slate-200/80" aria-hidden="true">
+                  <span
+                    className="block h-full rounded-full bg-accent transition-[width] duration-700"
+                    style={{ width: `${sectionProgressById?.get(section.id) ?? 0}%` }}
+                  />
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
       </nav>
 
-      <div className="px-7 pb-5 lg:absolute lg:inset-x-5 lg:bottom-0 lg:px-0 lg:pb-6">
-        <div
-          className="h-1 overflow-hidden rounded-full bg-slate-200"
-          role="progressbar"
-          aria-label="Section time remaining"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(sectionProgress)}
-        >
-          <span
-            className="block h-full rounded-full bg-accent transition-[width] duration-700"
-            style={{ width: `${sectionProgress}%` }}
-          />
+      {showProgress ? (
+        <div className="px-7 pb-5 lg:absolute lg:inset-x-5 lg:bottom-0 lg:px-0 lg:pb-6">
+          <div
+            className="h-1 overflow-hidden rounded-full bg-slate-200"
+            role="progressbar"
+            aria-label="Section time remaining"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(sectionProgress)}
+          >
+            <span
+              className="block h-full rounded-full bg-accent transition-[width] duration-700"
+              style={{ width: `${sectionProgress}%` }}
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
     </aside>
   );
 }
