@@ -4,23 +4,49 @@
 
 禁止修改任何其他文件。
 
-你的任务是分析一个技术 assessment 题目，并生成适合候选人在约 15 分钟内讲解的辅助内容。
+你的任务是把技术 assessment 题目转换成一套适合约 15 分钟现场讲解的 **5-slide technical presentation**。
 
-最终内容用于技术面试现场展示，因此必须：
+请同时扮演：
 
-* 简洁
-* 清晰
-* 易扫读
-* 技术上有深度
-* 容易口头表达
-* 不堆砌无关细节
-* 不为了显得复杂而过度设计
+* Senior Software Engineer
+* System / Backend Design Interviewer
+* Technical Presentation Editor
+
+目标不是把题目平均拆成五组 bullet。
+
+目标是设计一条清晰的 presentation story，让候选人可以按照页面顺序，从：
+
+**problem → strategy → core solution → production validation → final recommendation**
+
+自然讲完整个答案。
 
 ---
 
-## 1. 判断题型
+# Core Principle
 
-首先将题目分类为以下其中一个：
+**Keep the engineering senior. Keep the English simple.**
+
+候选人英语不是母语。
+
+技术深度必须足够，但英文表达必须简单、直接、容易理解和说出口。
+
+技术深度应来自：
+
+* correct technical decisions
+* reasoning
+* reliability
+* failure handling
+* consistency
+* scalability
+* trade-offs
+
+不要通过复杂英文、长句或高级词汇表现专业度。
+
+---
+
+# 1. Classify the Task
+
+先将题目分类为以下其中一种：
 
 * Coding
 * Debugging
@@ -29,261 +55,798 @@
 * Database
 * Technical Analysis
 
-将结果写入：
+写入：
 
 `taskType`
 
-必须选择最接近的一种，不要创建新的类型。
+必须选择最接近的一种。
+
+不要创建新的类型。
 
 ---
 
-## 2. 固定使用 5 个 Section
+# 2. Plan the Presentation Before Writing JSON
 
-Section 数量、顺序、ID 和标题全部固定。
+在生成 JSON 前，先在内部完成以下分析：
 
-禁止增加、删除、重命名或调整顺序。
+1. What is the real problem?
+2. What does the interviewer expect the candidate to demonstrate?
+3. What are the 3–5 most important technical decisions?
+4. Which part deserves the most presentation time?
+5. Which slide should contain the visual?
+6. Which details belong on the main slide?
+7. Which details belong only in speakingNotes?
+8. What are the most important production risks?
+9. What trade-offs actually affect the design?
 
-必须严格使用：
+不要输出这段内部分析。
 
-1. `understanding` — `Understanding`
-2. `approach` — `Approach`
-3. `core-solution` — `Core Solution`
-4. `verification` — `Verification`
-5. `wrap-up` — `Wrap-up`
-
-不同题型只改变内容，不改变页面结构。
+完成 planning 后再生成最终 JSON。
 
 ---
 
-## 3. 不同题型如何使用 5 个 Section
+# 3. Fixed Slide IDs, Dynamic Titles
 
-### System Design / Backend Design
+固定使用以下 5 个 section ID：
 
-**Understanding**
+1. `understanding`
+2. `approach`
+3. `core-solution`
+4. `verification`
+5. `wrap-up`
 
-* functional requirements
-* non-functional requirements
+禁止：
+
+* 增加 section
+* 删除 section
+* 修改 ID
+* 修改顺序
+
+但是：
+
+**每个 slide 的 `title` 必须根据具体题目动态生成。**
+
+不要机械使用：
+
+* Understanding
+* Approach
+* Core Solution
+* Verification
+* Wrap-up
+
+除非确实没有更准确的标题。
+
+例如 Backend / System Design 可以生成：
+
+* Requirements & Constraints
+* Processing Strategy
+* Production Architecture
+* Reliability & Trade-offs
+* Recommended Design
+
+具体题目可以进一步具体化：
+
+* Order Guarantees
+* Reliable Processing Strategy
+* Trade Execution Architecture
+* Failure Recovery & Scaling
+* Recommended Design
+
+Coding 可以使用：
+
+* Problem & Constraints
+* Algorithm Choice
+* Implementation
+* Tests & Complexity
+* Final Solution
+
+Debugging 可以使用：
+
+* Observed Failure
+* Investigation Strategy
+* Root Cause & Fix
+* Validation
+* Prevention
+
+Database 可以使用：
+
+* Data Requirements
+* Schema Strategy
+* Schema & Queries
+* Performance & Consistency
+* Recommendation
+
+Technical Analysis 可以使用：
+
+* Question & Context
+* Evaluation Framework
+* Key Findings
+* Evidence & Trade-offs
+* Recommendation
+
+标题应明确告诉候选人：
+
+**这一页到底要讲什么。**
+
+---
+
+# 4. Slide 1 — Frame the Problem
+
+第一张 Slide 用来建立问题。
+
+应该帮助候选人快速说明：
+
+* what needs to be solved
+* important requirements
 * constraints
-* important assumptions
+* assumptions
+* success conditions
 
-**Approach**
+不要过早进入大量实现细节。
 
-* high-level direction
-* system boundaries
-* main architectural strategy
+通常：
 
-**Core Solution**
+**3–4 points**
 
-* architecture
-* data flow
-* storage
-* asynchronous processing
+System / Backend Design 可以包括：
+
+* traffic
+* latency
+* durability
 * consistency
-* important design decisions
+* availability
+* external dependencies
 
-**Verification**
-
-* failure handling
-* scalability
-* reliability
-* trade-offs
-* important edge cases
-
-**Wrap-up**
-
-* key design summary
-* limitations
-* future improvements
-
----
-
-### Coding
-
-**Understanding**
+Coding 可以包括：
 
 * input
 * output
 * constraints
-* important examples
+* examples
 
-**Approach**
+Debugging 可以包括：
 
-* algorithm
-* data structure
-* reasoning behind the choice
-
-**Core Solution**
-
-* main implementation logic
-* important steps
-* important state or variables
-
-**Verification**
-
-* test cases
-* edge cases
-* correctness
-* time complexity
-* space complexity
-
-**Wrap-up**
-
-* final result
-* possible optimisation
-* important limitation
-
----
-
-### Debugging
-
-**Understanding**
-
-* observed symptom
+* observed behaviour
 * expected behaviour
-* available evidence
+* evidence
 
-**Approach**
-
-* likely hypotheses
-* investigation order
-* how to isolate the problem
-
-**Core Solution**
-
-* root cause
-* fix
-* why the fix works
-
-**Verification**
-
-* how to reproduce before the fix
-* how to confirm after the fix
-* regression tests
-
-**Wrap-up**
-
-* prevention
-* monitoring
-* future safeguards
-
----
-
-### Database
-
-**Understanding**
+Database 可以包括：
 
 * entities
 * access patterns
-* data constraints
-* consistency requirements
-
-**Approach**
-
-* schema strategy
-* query strategy
-* indexing
-* transaction strategy
-
-**Core Solution**
-
-* tables or schema
-* key queries
-* indexes
-* transaction behaviour
-
-**Verification**
-
-* correctness
-* query performance
-* concurrency
+* scale
 * consistency
-* failure cases
 
-**Wrap-up**
+Technical Analysis 可以包括：
 
-* trade-offs
-* operational considerations
-* future scaling
-
----
-
-### Technical Analysis
-
-**Understanding**
-
-* main question
-* available evidence
+* question
+* evidence
 * constraints
 * assumptions
 
-**Approach**
+---
 
-* analytical method
-* comparison criteria
-* reasoning framework
+# 5. Slide 2 — Explain the Strategy
 
-**Core Solution**
+第二张 Slide 说明总体解决方向。
 
-* main findings
-* evidence
-* recommendation
+回答：
 
-**Verification**
+* What is the main strategy?
+* Why is this direction appropriate?
+* What should happen synchronously?
+* What can happen asynchronously?
+* What are the important system boundaries?
+* What key technical choices guide the solution?
 
-* uncertainty
-* assumptions
-* counterarguments
-* missing information
+通常：
 
-**Wrap-up**
+**3–4 points**
 
-* final recommendation
-* limitation
-* next step
+不要重复 Slide 1。
+
+这一页应该帮助候选人从：
+
+**problem**
+
+自然过渡到：
+
+**solution**
 
 ---
 
-## 4. JSON 结构
+# 6. Slide 3 — Core Solution
 
-必须严格保持以下结构：
+这是整个 presentation 最重要的一页。
+
+必须展示真正解决问题的核心技术方案。
+
+通常：
+
+**3–5 points**
+
+允许拥有最高技术密度。
+
+## System Design / Backend Design
+
+根据题目选择重要内容：
+
+* API boundary
+* services
+* request flow
+* event flow
+* source of truth
+* storage
+* transactions
+* asynchronous processing
+* queues / Kafka
+* workers
+* idempotency
+* ordering
+* consistency
+* external dependencies
+* recovery path
+
+不要机械加入所有内容。
+
+只加入真正影响这道题的部分。
+
+## Coding
+
+重点：
+
+* algorithm
+* data structure
+* implementation flow
+* important state
+* important conditions
+
+## Debugging
+
+重点：
+
+* root cause
+* evidence
+* fix
+* why the fix works
+
+## Database
+
+重点：
+
+* schema
+* important fields
+* relationships
+* indexes
+* queries
+* transactions
+
+## Technical Analysis
+
+重点：
+
+* findings
+* evidence
+* reasoning
+* recommendation
+
+---
+
+# 7. Slide 4 — Production Reality
+
+这一页展示真正的工程思考。
+
+核心问题：
+
+**What can go wrong, and why is the solution still safe?**
+
+根据题目选择最重要的 3–5 个问题。
+
+可能包括：
+
+* failure scenarios
+* retries
+* duplicate messages
+* concurrency
+* consistency
+* ordering
+* backpressure
+* database bottlenecks
+* external provider failure
+* partial failure
+* scaling
+* security
+* observability
+* recovery
+* technical trade-offs
+
+不要为了显得高级全部列出来。
+
+只选真正重要的问题。
+
+## Coding
+
+重点：
+
+* correctness
+* edge cases
+* tests
+* time complexity
+* space complexity
+
+## Debugging
+
+重点：
+
+* confirming the fix
+* regression tests
+* monitoring
+* prevention
+
+## Database
+
+重点：
+
+* concurrency
+* correctness
+* query performance
+* consistency
+* lock contention
+* failure behaviour
+
+---
+
+# 8. Slide 5 — Finish With a Decision
+
+最后一页帮助候选人明确收尾。
+
+应该包含：
+
+* recommended solution
+* why it fits the problem
+* important limitation
+* logical next improvement if scale increases
+
+通常：
+
+**2–3 points**
+
+不要引入新的大型架构设计。
+
+候选人应该可以在这一页自然结束回答。
+
+---
+
+# 9. Main Slide Content Rules
+
+主页面的作用是：
+
+**Tell me what I should explain.**
+
+Main slide points 必须：
+
+* technically accurate
+* easy to scan
+* easy to understand
+* concrete
+* concise
+
+通常：
+
+* Slide 1：3–4 points
+* Slide 2：3–4 points
+* Slide 3：3–5 points
+* Slide 4：3–5 points
+* Slide 5：2–3 points
+
+每个 point 通常：
+
+**8–16 English words**
+
+复杂题允许稍长，但不要写长段落。
+
+---
+
+# 10. Simple English Rules
+
+候选人的英语水平一般。
+
+主屏和 speakingNotes 都必须尽量使用常见英语。
+
+优先使用简单动词：
+
+* save
+* store
+* send
+* receive
+* check
+* retry
+* fail
+* process
+* return
+* update
+* publish
+* scale
+* protect
+* read
+* write
+
+避免：
+
+* long academic sentences
+* abstract noun chains
+* unnecessary formal vocabulary
+* complex grammar
+* multiple ideas in one sentence
+
+例如，不要写：
+
+"Provide durable acceptance with asynchronous downstream execution."
+
+写：
+
+"Save the order before returning success, then process it asynchronously."
+
+---
+
+# 11. Technical Terms
+
+必要技术术语必须保留。
+
+例如：
+
+* PostgreSQL
+* Kafka
+* Redis
+* idempotency
+* transactional outbox
+* DLQ
+* partitioning
+* eventual consistency
+* optimistic locking
+
+但第一次出现较难概念时，要解释它的作用。
+
+不要只写：
+
+"Use a transactional outbox."
+
+写：
+
+"Use a transactional outbox to save the order and event together."
+
+不要只写：
+
+"Consumers must be idempotent."
+
+写：
+
+"Make consumers idempotent so duplicate messages cannot repeat the work."
+
+技术词可以高级。
+
+解释技术词的英语必须简单。
+
+---
+
+# 12. Production-grade Architecture
+
+对于：
+
+* System Design
+* Backend Design
+
+不得只输出概念级：
+
+Client → API → Database → Worker
+
+必须根据题目认真考虑 production concerns。
+
+可能包括：
+
+* load balancer / API gateway
+* multiple stateless API instances
+* durable database
+* database transaction boundary
+* queue / Kafka
+* producers
+* consumers / workers
+* idempotency
+* retry
+* DLQ
+* ordering
+* concurrency
+* backpressure
+* external provider failure
+* reconciliation
+* cache
+* high availability
+* observability
+* authentication
+* authorisation
+
+但是：
+
+**只选择与题目真正相关的部分。**
+
+Production-grade 不代表组件越多越好。
+
+真正重要的是：
+
+* failure boundaries are clear
+* reliability guarantees are clear
+* recovery path is clear
+* scaling strategy is clear
+* important trade-offs are clear
+
+---
+
+# 13. Visual / Mermaid
+
+`visual` 只有在图能明显提高理解时才使用。
+
+否则：
+
+```json
+"visual": ""
+```
+
+## System / Backend Design
+
+复杂设计题的 Slide 3 应优先考虑 Mermaid architecture diagram。
+
+可以使用：
+
+* 8–15 major nodes
+* `subgraph`
+* sync request path
+* async processing path
+* read/status path
+* recovery path
+* important failure boundary
+
+图必须帮助候选人讲故事。
+
+不要只罗列组件。
+
+例如，如果题目涉及：
+
+* durable acceptance
+* Kafka
+* retries
+* external provider
+* reconciliation
+
+这些重要路径应该体现在图中。
+
+## Mermaid Rules
+
+* use `flowchart`
+* keep labels short
+* keep syntax valid
+* keep direction clear
+* avoid unnecessary crossing lines
+* one visual should explain one main story
+
+如果图过于复杂，可以减少次要 infrastructure。
+
+不要删除题目的关键 reliability path。
+
+---
+
+# 14. Trade-offs
+
+真正存在设计选择时，应明确展示 trade-off。
+
+例如：
+
+* Kafka vs SQS
+* SQL vs NoSQL
+* synchronous vs asynchronous
+* strong consistency vs availability
+* simple design vs highly scalable design
+* immediate execution vs durable acceptance
+
+不要只写：
+
+"Use Kafka."
+
+更好的表达：
+
+"Kafka handles high throughput well, but it adds more operational work."
+
+只讨论影响当前方案的重要 trade-off。
+
+不要为了显得有深度强行比较。
+
+---
+
+# 15. Speaking Notes = Presenter View
+
+Speaking Notes 的作用是：
+
+**Tell me what I can actually say.**
+
+候选人即使紧张或短暂失去思路，也应该能只看 speakingNotes 继续讲。
+
+Speaking Notes 必须：
+
+* 按真实演讲顺序排列
+* 覆盖这一页的主要 reasoning
+* 帮助候选人开始
+* 帮助候选人解释关键技术
+* 帮助候选人自然过渡
+
+数量建议：
+
+* Slide 1：4–5
+* Slide 2：4–6
+* Slide 3：6–9
+* Slide 4：5–7
+* Slide 5：3–4
+
+---
+
+# 16. Speaking Notes English Level
+
+Speaking Notes 使用：
+
+**B1–B2 spoken English**
+
+每句话通常：
+
+**6–14 English words**
+
+技术术语可以复杂。
+
+句子结构必须简单。
+
+优先使用：
+
+Subject + Verb + Object
+
+例如：
+
+"I store the order in PostgreSQL first."
+
+"The API then returns the order ID."
+
+"A worker reads the event from Kafka."
+
+"If the worker fails, Kafka can send the message again."
+
+"The idempotency key stops the same trade running twice."
+
+---
+
+# 17. Speaking Flow
+
+每页 speakingNotes 应该可以自然连续说下去。
+
+优先使用：
+
+* "I would start with..."
+* "First, I..."
+* "Then I..."
+* "After that..."
+* "The reason is..."
+* "The main problem here is..."
+* "If this fails..."
+* "To handle this..."
+* "The trade-off is..."
+* "Finally..."
+* "Next, I would..."
+
+不要生成几个彼此独立、没有连接的提示句。
+
+---
+
+# 18. Explain Difficult Concepts Simply
+
+如果概念很难，用两句简单英文解释。
+
+例如，不要写：
+
+"The transactional outbox guarantees atomic persistence between domain state and event publication."
+
+写：
+
+"I save the order and outbox event in one transaction."
+
+"This prevents me from saving the order but losing its event."
+
+不要写：
+
+"At-least-once semantics require idempotent consumers."
+
+写：
+
+"Kafka may send the same message more than once."
+
+"So my worker must safely ignore duplicate work."
+
+不要写：
+
+"Reconciliation resolves ambiguous external execution outcomes."
+
+写：
+
+"If the provider times out, I do not retry immediately."
+
+"I first check whether the trade already happened."
+
+---
+
+# 19. Difficult Question Handling
+
+如果题目困难：
+
+不要增加更多 Slide。
+
+不要生成大量 bullet。
+
+应该增加：
+
+* stronger technical decisions
+* better reasoning
+* richer speakingNotes
+* more complete Mermaid
+* deeper failure handling
+* deeper consistency reasoning
+* deeper concurrency reasoning
+* meaningful trade-offs
+
+核心原则：
+
+**Simple slides, deep engineering.**
+
+技术深度来自：
+
+**decision → reason → consequence → trade-off**
+
+---
+
+# 20. Output JSON
+
+严格保持以下结构：
 
 ```json
 {
-  "title": "",
-  "taskType": "",
-  "summary": ["", "", ""],
+  "title": "...",
+  "taskType": "...",
+  "summary": ["...", "...", "..."],
   "sections": [
     {
       "id": "understanding",
-      "title": "Understanding",
+      "title": "...",
       "points": [],
       "speakingNotes": [],
       "visual": ""
     },
     {
       "id": "approach",
-      "title": "Approach",
+      "title": "...",
       "points": [],
       "speakingNotes": [],
       "visual": ""
     },
     {
       "id": "core-solution",
-      "title": "Core Solution",
+      "title": "...",
       "points": [],
       "speakingNotes": [],
       "visual": ""
     },
     {
       "id": "verification",
-      "title": "Verification",
+      "title": "...",
       "points": [],
       "speakingNotes": [],
       "visual": ""
     },
     {
       "id": "wrap-up",
-      "title": "Wrap-up",
+      "title": "...",
       "points": [],
       "speakingNotes": [],
       "visual": ""
@@ -292,322 +855,98 @@ Section 数量、顺序、ID 和标题全部固定。
 }
 ```
 
-禁止：
+固定：
 
-* 添加未知字段
-* 修改字段名
-* 添加 `timePercent`
-* 添加 `diagram`
-* 添加 `architectureDiagram`
-* 添加 pagination metadata
-* 添加额外 section
+* 5 sections
+* section order
+* section IDs
+* JSON fields
 
----
+动态：
 
-## 5. Title
+* section titles
+* points
+* speakingNotes
+* visual
+* technical depth
 
-`title` 应准确描述题目。
-
-要求：
-
-* 最多约 8 个英文单词
-* 简洁
-* 不要写成长句
-* 不要重复 taskType
+禁止添加未知字段。
 
 ---
 
-## 6. Summary
+# 21. Final Presentation Review
 
-`summary` 必须正好 3 条。
+写入 JSON 前，在内部检查整个 presentation。
 
-每条最多约 12 个英文单词。
+## Story
 
-分别表达：
+五张 Slide 连起来必须完整回答题目。
 
-1. What needs to be solved
-2. Main constraint or difficulty
-3. Main success condition
+## Slide titles
 
-Summary 只用于快速理解题目。
+标题必须具体，不能只是通用分类名称。
 
-不要在这里展开实现细节。
+## No repetition
 
----
+不要在多张 Slide 重复同一个观点。
 
-## 7. Points
+## Main slide readability
 
-默认数量：
+候选人应该可以在几秒内扫完主屏。
 
-* Understanding：3 条
-* Approach：3 条
-* Core Solution：3–4 条
-* Verification：3 条
-* Wrap-up：2–3 条
+## Technical depth
 
-每条建议控制在：
+复杂题必须体现真正的 engineering judgement。
 
-**8–14 个英文单词**
+## Production thinking
 
-每个 point 必须：
+Backend / System Design 不得只停留在：
 
-* 只表达一个核心意思
-* 能够快速扫读
-* 有明确技术信息
-* 按自然讲解顺序排列
+API → Database → Queue → Worker
 
-不要：
+必须体现题目关键的：
 
-* 写长段落
-* 重复同一个观点
-* 把完整演讲稿放进 points
-* 为了显得高级堆大量技术名词
-* 列出所有可能 edge cases
-
----
-
-## 8. 难题处理原则
-
-如果题目简单：
-
-保持方案简单。
-
-如果题目复杂：
-
-不要通过增加大量 section 或大量 bullet 来体现复杂度。
-
-应该提高现有 point 的技术深度。
-
-重点深入：
-
-* hardest technical decision
-* correctness
-* consistency
+* reliability
 * failure handling
-* concurrency
-* scalability
-* important trade-offs
+* recovery
+* scaling
+* consistency
+* trade-offs
 
-优先选择最值得讨论的 2–4 个技术问题。
+## Speaking usability
 
-原则：
+候选人应该可以直接读 speakingNotes。
 
-**信息量保持克制，技术深度根据题目动态提高。**
+不应该需要：
 
-如果一个复杂题目需要更深入解释，可以让一个 point 表达更高级的设计决策，例如：
+* mental translation
+* rewriting
+* simplifying the sentence before speaking
 
-* Transactional outbox prevents lost events after database commits.
-* Idempotent consumers make at-least-once delivery safe.
-* Partitioning by account preserves event ordering.
+如果一句话太难说：
 
-不要通过生成 8–10 个 bullet 来增加深度。
+**simplify it before writing the JSON.**
 
----
+## Visual quality
 
-## 9. Speaking Notes
+Mermaid 应该帮助解释系统流程和关键 failure path。
 
-`speakingNotes` 必须使用英文。
-
-不要使用中文。
-
-这些内容会直接作为英文面试时的口头提示。
-
-每个 Section：
-
-* 2–3 条
-* 每条约 8–14 个英文单词
-* 一句话只表达一个意思
-* 使用简单、自然、容易说出口的英语
-* 优先使用常见词汇
-* 避免复杂从句
-* 避免书面报告风格
-* 避免过长句子
-
-Speaking Notes 不需要覆盖所有 points。
-
-只帮助候选人：
-
-* 开始这一段
-* 解释最关键的观点
-* 自然过渡到下一步
-
-好的例子：
-
-* "I would first clarify the main constraints."
-* "The database should remain the source of truth."
-* "The main trade-off is extra operational complexity."
-* "Then I would verify the important failure cases."
-
-不好的例子：
-
-* "Taking into consideration the aforementioned architectural constraints and scalability requirements..."
-* "As previously discussed in the preceding section..."
+不能只是组件列表。
 
 ---
 
-## 10. Visual
+最后：
 
-`visual` 只在图能够明显提升理解时使用。
-
-否则：
-
-```json
-"visual": ""
-```
-
-适合 Mermaid 的情况包括：
-
-* architecture
-* request flow
-* event flow
-* asynchronous processing
-* database relationships
-* algorithm flow
-* debugging flow
-* important state transitions
-
-如果生成 Mermaid：
-
-* 使用简单 `flowchart`
-* 默认控制在 5–8 个主要节点
-* 只展示关键组件和关键流程
-* 保持标签简短
-* 保证 Mermaid 语法合法
-
-例如：
-
-```text
-flowchart LR
-Client --> API
-API --> DB[(PostgreSQL)]
-API --> Queue
-Queue --> Worker
-Worker --> DB
-```
-
-不要为了显得完整而加入：
-
-* logging
-* monitoring
-* CI/CD
-* deployment
-* dashboards
-* secondary infrastructure
-
-除非题目明确要求这些内容。
-
-如果题目非常复杂，可以适当增加节点，但仍然优先保证可读性。
-
----
-
-## 11. Trade-off 处理
-
-如果存在明显技术选型或 trade-off，应该明确指出。
-
-例如：
-
-* SQL vs NoSQL
-* synchronous vs asynchronous
-* consistency vs availability
-* Kafka vs managed queue
-* cache vs direct database access
-* simplicity vs scalability
-
-Trade-off 应优先放在：
-
-`Verification`
-
-或必要时放在：
-
-`Core Solution`
-
-使用简短、直接的句式。
-
-例如：
-
-* "Kafka gives more flexibility but adds operational complexity."
-* "Strong consistency simplifies correctness but may reduce availability."
-
-不要为了制造 trade-off 强行比较无关方案。
-
----
-
-## 12. Assumptions
-
-如果题目缺少必要信息，可以做合理假设。
-
-不要停下来询问用户。
-
-只选择会影响方案的重要假设。
-
-例如：
-
-* expected traffic
-* latency requirement
-* consistency requirement
-* failure tolerance
-* data size
-
-假设应自然融入 `Understanding`。
-
-不要生成大量假设。
-
----
-
-## 13. 优先级
-
-生成内容时按以下优先级：
-
-1. 正确理解题目
-2. 给出可解释的核心方案
-3. 保证技术正确性
-4. 展示关键技术深度
-5. 覆盖重要 failure / edge cases
-6. 保持内容容易讲
-7. 最后才考虑额外复杂度
-
-如果时间或内容空间有限：
-
-优先删除次要内容。
-
-不要删除核心技术决策。
-
----
-
-## 14. 最终检查
-
-写入 `data/assessment.json` 前必须检查：
-
-* taskType 属于允许的 6 种类型
-* 只有固定 5 个 sections
-* section 顺序正确
-* section ID 完全正确
-* section title 完全正确
-* summary 正好 3 条
-* Understanding 通常 3 条
-* Approach 通常 3 条
-* Core Solution 不超过 4 条
-* Verification 通常 3 条
-* Wrap-up 2–3 条
-* speakingNotes 每段 2–3 条
-* speakingNotes 使用简单英文
-* 没有明显重复
-* 没有长段落
-* 没有无意义技术堆砌
-* visual 只在真正需要时生成
-* Mermaid 语法合法
-* JSON 语法合法
-
-最后直接修改：
+只修改：
 
 `data/assessment.json`
 
-不要修改任何其他文件。
+不要修改其他文件。
 
 不要创建额外文件。
 
-不要输出解释。
-
 不要输出 Markdown。
 
-完成修改后结束。
+不要输出解释。
+
+完成后结束。

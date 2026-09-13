@@ -104,17 +104,28 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
               </h2>
 
               <ul className="mt-[clamp(2.25rem,6vh,4.5rem)] grid max-w-[820px] gap-y-9">
-                {section.speakingNotes.map((note, noteIndex) => (
-                  <li
-                    key={note}
-                    className="flex gap-4 border-l-2 border-accent pl-4 text-[clamp(1.16rem,1rem+0.45vw,1.5rem)] leading-[1.75] text-ink"
-                  >
-                    <span className="shrink-0 font-mono text-[clamp(0.7rem,0.62rem+0.12vw,0.84rem)] font-semibold text-accent">
-                      {String(noteIndex + 1).padStart(2, "0")}
-                    </span>
-                    <span>{note}</span>
-                  </li>
-                ))}
+                {section.speakingNotes.map((note, noteIndex, notes) => {
+                  const isFirst = noteIndex === 0;
+                  const isLast = noteIndex === notes.length - 1;
+                  const label = isFirst ? "Start here" : isLast ? "Transition" : "Explain";
+
+                  return (
+                    <li
+                      key={note}
+                      className={
+                        isFirst
+                          ? "rounded-lg bg-accent-soft p-5 text-ink"
+                          : "border-l-2 border-accent pl-4 text-ink"
+                      }
+                    >
+                      <div className="mb-2 flex items-center gap-3 text-[clamp(0.7rem,0.62rem+0.12vw,0.84rem)] font-bold uppercase tracking-[0.16em] text-accent">
+                        <span className="font-mono">{String(noteIndex + 1).padStart(2, "0")}</span>
+                        <span>{label}</span>
+                      </div>
+                      <p className="text-[clamp(1.16rem,1rem+0.45vw,1.5rem)] leading-[1.75]">{note}</p>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}

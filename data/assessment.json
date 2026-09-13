@@ -1,85 +1,111 @@
 {
-  "title": "Reliable Trade Order Processing",
-  "taskType": "Backend Design",
+  "title": "Multi-Region Copy Trading: Ordered, Safe Fan-out",
+  "taskType": "System Design",
   "summary": [
-    "Accept buy and sell orders quickly with a stable order ID.",
-    "Persist order state before any asynchronous execution begins.",
-    "Make retries safe while scaling to 5,000 requests per second."
+    "Durably accept ordered lead events, then fan them out to many follower accounts.",
+    "Use per-lane idempotency, leases, and broker reconciliation for safe at-least-once processing.",
+    "Fail over with one execution owner while keeping accepted events replayable and auditable."
   ],
   "sections": [
     {
       "id": "understanding",
-      "title": "Understanding",
+      "title": "Scale, Guarantees & Failure Boundaries",
       "points": [
-        "The API accepts buy or sell orders and returns quickly with an order ID.",
-        "Every accepted order must be durable and observable through a status endpoint.",
-        "The system must prevent duplicate execution at 5,000 requests per second despite provider failures."
+        "Support 10,000 lead events per second and 100,000 followers for one lead trader.",
+        "Preserve order for each lead while processing different leads in parallel.",
+        "Accepted events must survive regional loss and expose current copy status.",
+        "Internal delivery is at least once; safe recovery needs idempotency or reliable broker lookup."
       ],
       "speakingNotes": [
-        "I would clarify that quick API response means acknowledgement, not synchronous execution.",
-        "The order ID and status contract let users follow progress after the request returns.",
-        "The hardest requirement is safe recovery when an external provider may have accepted an order before timing out."
+        "I would start with one immutable sequence for every lead event.",
+        "The platform saves an accepted event before success; failed quorum writes return errors.",
+        "Events from one lead must keep order, but leads can run independently.",
+        "The broker may be slow, rate limited, unavailable, or unclear after timeout.",
+        "Internal delivery is at least once, so duplicate work is expected.",
+        "One trade needs broker idempotency or reliable lookup to avoid duplicates."
       ],
       "visual": ""
     },
     {
       "id": "approach",
-      "title": "Approach",
+      "title": "Durable Events, Parallel Lanes, Single Ownership",
       "points": [
-        "Use a stateless API to validate, authenticate, and durably accept each order.",
-        "Separate order acceptance from execution with a transactional outbox and durable queue.",
-        "Treat execution as an idempotent state machine with explicit recovery for ambiguous outcomes."
+        "Route each lead to a home region with an ordered ledger and cross-region quorum.",
+        "Save the lead event and outbox record together before returning success.",
+        "Fan out in batches, then process each lead–follower lane independently.",
+        "Use broker adapters for rate limits, retries, status lookup, and provider differences."
       ],
       "speakingNotes": [
-        "The API path should do only validation and the minimum durable write needed to accept the order.",
-        "The outbox prevents a committed order from being lost if the service crashes before publishing work.",
-        "Workers can retry, but they must reconcile an uncertain provider result before sending again."
+        "I would separate fast acceptance from slow broker execution.",
+        "A home region assigns the lead sequence and owns normal processing.",
+        "A quorum commit completes before success; the append-only ledger supports audit and replay.",
+        "The fan-out service handles large follower lists in small batches.",
+        "Each lead and follower pair becomes an independent ordered lane.",
+        "Broker adapters hide different APIs and apply per-broker backpressure."
       ],
       "visual": ""
     },
     {
       "id": "core-solution",
-      "title": "Core Solution",
+      "title": "Ordered Fan-out and Safe Broker Execution",
       "points": [
-        "Store orders with a unique client idempotency key and an explicit state machine in PostgreSQL.",
-        "Commit the order and an outbox event in one transaction, then publish the event to a durable queue.",
-        "Workers claim orders with leases and send the provider the same idempotency key on every retry.",
-        "On a timeout, reconcile with the provider before retrying; record execution and status transitions durably."
+        "Partition Kafka by leadId; a sequence number defines the required event order.",
+        "Create unique, queryable copy intents for every lead event and follower account.",
+        "Advance each lane only after execution, rejection, or unsubscribe skip is terminal.",
+        "Use a deterministic client order ID so retries describe the same trade.",
+        "Put ambiguous timeouts into reconciliation before sending another broker request."
       ],
       "speakingNotes": [
-        "A unique constraint makes concurrent duplicate submissions return the original order rather than create another one.",
-        "At-least-once delivery is acceptable when both the worker and the provider call are idempotent.",
-        "The ambiguous timeout state is important: blindly retrying could execute a trade twice."
+        "The API writes the lead event and outbox row in one transaction.",
+        "Every event has an immutable ID and a monotonic lead sequence.",
+        "Kafka partitions by lead ID, so one lead keeps its order.",
+        "Fan-out writes copy intents in batches with a unique business key.",
+        "The key is lead event ID plus follower account ID.",
+        "An executor waits for the next sequence in each lane.",
+        "It sends a deterministic client order ID through the broker adapter.",
+        "The status API reads intent states, not worker memory.",
+        "A timeout first triggers a broker lookup and reconciliation."
       ],
-      "visual": "flowchart LR\n  Client --> API\n  API --> Orders[(PostgreSQL)]\n  API --> Outbox[(Outbox)]\n  Outbox --> Queue[(Durable Queue)]\n  Queue --> Worker\n  Worker --> Provider[Execution Provider]\n  Worker --> Reconcile[Reconcile]\n  Reconcile --> Provider\n  Worker --> Orders"
+      "visual": "flowchart LR\n  C[Clients] --> API[Global API]\n  API --> L[(Lead Ledger)]\n  API --> O[(Transactional Outbox)]\n  O --> K[(Geo-replicated Kafka)]\n  K --> F[Batch Fan-out]\n  F --> I[(Copy Intent Store)]\n  I --> W[Lane Executors]\n  W --> E[(Lease + Fencing Epoch)]\n  W --> A[Broker Adapter]\n  A --> B[External Broker]\n  API --> S[Status API]\n  S --> I\n  A -. ambiguous timeout .-> R[Reconcile Worker]\n  R --> B\n  R --> I\n  T[Failover Controller] --> E"
     },
     {
       "id": "verification",
-      "title": "Verification",
+      "title": "Failure Safety, Failover & Reconciliation",
       "points": [
-        "Test concurrent duplicate requests, duplicate queue messages, worker crashes, and lease expiry.",
-        "Test provider success, rejection, timeout after acceptance, and repeated reconciliation.",
-        "Load test 5,000 requests per second and monitor API latency, queue lag, database saturation, and stuck orders."
+        "Crash and redelivery tests prove unique intent keys prevent duplicate internal work.",
+        "Timeout handling queries broker history before retrying; unresolved trades stay UNKNOWN.",
+        "Unsubscribe writes a sequence fence; later intents skip before broker submission.",
+        "Failover grants one region a fencing epoch; ambiguous lanes wait for reconciliation.",
+        "Replay and reconciliation repair state while alerts expose lag, failures, and drift."
       ],
       "speakingNotes": [
-        "I would test the crash windows around the database commit, queue publish, and provider response.",
-        "The most important assertion is one business execution, even when the same message is delivered repeatedly.",
-        "Capacity testing must include the database and provider limits, not only the API tier."
+        "I would test duplicate requests, duplicate messages, worker crashes, and lease expiry.",
+        "The hardest test is broker acceptance followed by a lost response.",
+        "The worker queries the same client ID before any retry.",
+        "If supported, it retries with the same ID; otherwise the trade stays UNKNOWN for review.",
+        "Unsubscribe records a cutover sequence in durable subscription state.",
+        "Already in-flight broker calls may finish, but later calls are skipped.",
+        "Failover waits for lease expiry and then issues a higher epoch.",
+        "Old workers lose ownership, and fenced state writes are rejected.",
+        "The same client ID makes a late old call safe at an idempotent broker.",
+        "Replay rebuilds missing intents; reconciliation compares broker and internal records.",
+        "I alert on queue lag, UNKNOWN age, broker errors, lease loss, and replication lag."
       ],
       "visual": ""
     },
     {
       "id": "wrap-up",
-      "title": "Wrap-up",
+      "title": "Recommended Guarantee: Durable, Ordered, Recoverable Copying",
       "points": [
-        "Return quickly from a durable acceptance path, then process execution asynchronously.",
-        "Use idempotency, reconciliation, and explicit unknown states to make partial failures safe.",
-        "Scale stateless APIs and workers independently, while keeping PostgreSQL the order-state source of truth."
+        "Durable acceptance and batched fan-out handle high event volume and large follower lists.",
+        "Per-lane order, idempotency, leases, and reconciliation protect execution through failures.",
+        "Brokers without idempotency or lookup support cannot promise exactly once; UNKNOWN needs review."
       ],
       "speakingNotes": [
-        "The design prioritises durable acceptance and safe recovery over pretending every network call is exactly once.",
-        "True no-duplicate execution requires the provider to support idempotency or a reliable reconciliation API.",
-        "I would start with this flow, measure queue and provider bottlenecks, and scale the independent tiers as needed."
+        "My recommendation is durable acceptance with asynchronous copy execution.",
+        "Lead ordering stays local, while follower work scales across many workers.",
+        "The trade-off is eventual status instead of immediate execution confirmation.",
+        "I would never hide an unsupported broker limitation behind a false guarantee."
       ],
       "visual": ""
     }
