@@ -30,6 +30,8 @@ export function useSyncedSection(initialSection: string) {
     }
 
     const receiveSection = (id: string) => {
+      if (activeSectionRef.current === id) return;
+
       activeSectionRef.current = id;
       setActiveSectionState(id);
       setExternalSection(id);

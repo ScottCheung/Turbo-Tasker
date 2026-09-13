@@ -1,111 +1,139 @@
 {
-  "title": "Multi-Region Copy Trading: Ordered, Safe Fan-out",
-  "taskType": "System Design",
+  "title": "Flash-Sale E-commerce Backend: Safe Stock, Fast Orders",
+  "taskType": "Backend Design",
   "summary": [
-    "Durably accept ordered lead events, then fan them out to many follower accounts.",
-    "Use per-lane idempotency, leases, and broker reconciliation for safe at-least-once processing.",
-    "Fail over with one execution owner while keeping accepted events replayable and auditable."
+    "先拆清 Flash Sale 的高并发、库存和支付风险，再形成整体方案。",
+    "用 PostgreSQL transaction + stock buckets 防止 oversell，用 Kafka 处理慢任务。",
+    "用 idempotency、guarded state transition 和 reconciliation 保证 retry 与 crash recovery 安全。"
   ],
   "sections": [
     {
       "id": "understanding",
-      "title": "Scale, Guarantees & Failure Boundaries",
+      "title": "Understanding",
       "points": [
-        "Handle 10,000 lead events per second, with one lead reaching 100,000 followers.",
-        "Preserve order per lead, while processing different leads in parallel.",
-        "Accepted events survive regional failure and show current follower trade status.",
-        "Safe recovery needs broker idempotency or a reliable result lookup."
+        "背景：Flash Sale 电商；用户 browse 商品、加入 cart、再 place order。",
+        "流量：最多 100,000 个并发用户；同一个 SKU 会形成 hot spot。",
+        "核心目标：快速返回 order response，同时保证库存绝不 oversell。",
+        "Functional：创建 order、处理 payment、查询 order/payment status、支持安全 retry。",
+        "库存约束：下单时做 stock reservation；payment failed 或 10 分钟未支付就 release。",
+        "支付约束：Payment Provider 可能 slow、unavailable 或 timeout；同一 order 不能重复 charge。",
+        "可靠性要求：order service crash 后要恢复 payment state；order history 必须可 audit。",
+        "关键难点：高并发库存一致性，以及 Provider timeout 带来的 unknown payment state。",
+        "假设与保证：PostgreSQL 保存核心状态；Provider 支持 status query 和 idempotency key。"
       ],
       "speakingNotes": [
-        "I would first define the guarantee and the main limit.",
-        "The platform accepts an event only after durable cross-region storage.",
-        "Every lead event receives one monotonic sequence number.",
-        "Different leads can run in parallel, but one lead keeps order.",
-        "Workers may receive duplicate messages after crashes or retries.",
-        "A broker needs idempotency or reliable lookup to avoid duplicate trades."
+        "我先拆一下题目。",
+        "这是一个 Flash Sale 电商。",
+        "用户 browse 商品、加入 cart、提交 order。",
+        "高峰可能有 100,000 个并发用户。",
+        "同一个 SKU 会形成 hot spot。",
+        "最重要的是库存不能 oversell。",
+        "用户还要快速收到 order response。",
+        "它可能 slow、unavailable 或 timeout。",
+        "timeout 不代表 payment 一定失败。",
+        "retry 不能重复 order 或 charge。",
+        "未支付订单十分钟后要 release stock。",
+        "用户可以查询 order 和 payment status。",
+        "crash 后要恢复 state，history 要可 audit。",
+        "我假设 PostgreSQL 保存核心状态，Provider 支持 status query。"
       ],
       "visual": ""
     },
     {
       "id": "approach",
-      "title": "Ordered Ledgers, Async Fan-out, Isolated Brokers",
+      "title": "Approach",
       "points": [
-        "Assign each lead a home region and one ordered event ledger.",
-        "Commit the event and outbox record before returning success.",
-        "Fan out followers in chunks, then run independent ordered lanes.",
-        "Apply broker quotas and backpressure outside the acceptance path."
+        "先把 sync path 做短：validation、idempotency 和 stock reservation 完成后立即返回。",
+        "把 external payment 放到 async Worker；订单先进入 PENDING_PAYMENT，不阻塞 API。",
+        "PostgreSQL 保存 order、payment、reservation 和 audit event，作为 source of truth。",
+        "Kafka 配合 transactional outbox 传递可靠任务；Admission Control 和 backpressure 吸收 traffic spike。",
+        "所有 retry 都带 idempotency；用 guarded state transition 和 reconciliation 处理未知结果。"
       ],
       "speakingNotes": [
-        "I would separate fast acceptance from slow broker execution.",
-        "A home region assigns the sequence and owns normal processing.",
-        "A transactional outbox saves the event and publish request together.",
-        "A quorum commit completes before the API reports success.",
-        "The append-only ledger supports audit history and later replay.",
-        "Fan-out pages through large follower lists instead of one huge transaction.",
-        "Broker adapters hide different APIs and enforce per-broker capacity."
+        "现在开始推导整体方案。",
+        "我先区分 sync 和 async。",
+        "API path 只做快速检查。",
+        "核心状态先写 PostgreSQL。",
+        "慢的 payment 放到 Worker。",
+        "Kafka 可靠传递异步任务。",
+        "Admission Control 配合 backpressure。",
+        "retry 必须带 idempotency。"
       ],
       "visual": ""
     },
     {
       "id": "core-solution",
-      "title": "Core Flow: From Lead Event to Follower Trade",
+      "title": "Core Solution",
       "points": [
-        "Partition Kafka by leadId; the sequence number defines the event order.",
-        "Create unique, queryable intents for each event, follower, and action version.",
-        "Advance a lead–follower lane only after a terminal result.",
-        "Send a deterministic client order ID through every broker retry.",
-        "Read status from intents and reconcile uncertain provider results."
+        "Order API 用 userId + clientRequestId 做 idempotency；unique constraint 让重复请求返回同一个 order。",
+        "Checkout transaction 用 FOR UPDATE SKIP LOCKED 找到 stock bucket，条件扣减并写入 stock reservation，保证不 oversell。",
+        "同一 transaction 写入 PENDING_PAYMENT order、expiresAt、reservation、audit event 和 transactional outbox，然后快速返回 orderId。",
+        "Outbox Publisher 把任务送入 Kafka；Payment Worker 使用固定 provider idempotency key 调用 Payment Provider。",
+        "Provider success / failed 用 guarded state transition 更新 order；成功消费 reservation，失败释放 reservation。",
+        "Provider timeout 先做 status query；Reconciliation Worker 处理 unknown result 和 crash recovery，Status API 读取 durable state。",
+        "Expiry Worker 找到超过 10 分钟的 PENDING_PAYMENT order，在 transaction 中改为 EXPIRED 并释放 reservation。"
       ],
       "speakingNotes": [
-        "The event ledger is the source for replay and audit.",
-        "Kafka preserves order for each lead, not one global stream.",
-        "Fan-out snapshots active subscriptions at the event sequence.",
-        "It writes intents with a unique event and follower key.",
-        "The intent state can be pending, executed, rejected, unknown, or skipped.",
-        "The lane pointer blocks the next event until this one finishes.",
-        "This protects order when fan-out batches finish at different times.",
-        "The adapter sends the same client ID on every retry.",
-        "The status page reads durable intents, so users see current progress."
+        "先讲一笔 order 的 data flow。",
+        "API 做 validation 和 idempotency。",
+        "重复请求返回已有 order。",
+        "Transaction 用 SKIP LOCKED 找 bucket。",
+        "条件扣减保证不 oversell。",
+        "同时写 order、reservation、outbox、audit event。",
+        "API 返回 PENDING_PAYMENT，不等 Provider。",
+        "Kafka 把任务交给 Payment Worker。",
+        "Worker 使用固定 idempotency key。",
+        "success 或 failed 用 guarded transition，failed release reservation。",
+        "timeout 先 query status，unknown 不 blind retry。",
+        "Reconciliation 处理 unknown 和 crash recovery。",
+        "Expiry Worker release 过期库存。",
+        "Status API 读取 durable state。"
       ],
-      "visual": "flowchart LR\n  Client[Lead and Follower API] --> Gateway[Global Gateway]\n  Gateway --> Router[Lead Home Router]\n  Router --> Ledger[(Ordered Event Ledger)]\n  Router --> Outbox[(Transactional Outbox)]\n  Outbox --> Log[(Geo-replicated Kafka)]\n  Log --> Fanout[Chunked Fan-out]\n  Fanout --> Intent[(Copy Intent Store)]\n  Intent --> Lane[Per-lane Executor]\n  Lane --> Fence[(Lease + Epoch Store)]\n  Lane --> Adapter[Broker Adapter]\n  Adapter --> Broker[External Broker]\n  Gateway --> Status[Status API]\n  Status --> Intent\n  Adapter -. ambiguous timeout .-> Recon[Reconciliation Worker]\n  Recon --> Broker\n  Recon --> Intent\n  Failover[Failover Controller] --> Fence"
+      "visual": "flowchart LR\n  User[User] --> Gateway[API Gateway]\n  Gateway --> Edge[Rate Limit + Admission Control]\n  Gateway --> Read[Catalog and Status API]\n  Read --> Cache[(Redis Cache)]\n  Read --> DB[(PostgreSQL)]\n  Edge --> Checkout[Stateless Checkout Service]\n  Checkout --> DB\n  Checkout --> Stock[Stock Service]\n  Stock --> Buckets[(Stock Buckets)]\n  Checkout --> Outbox[Transactional Outbox]\n  Outbox --> Kafka[Kafka Queue]\n  Kafka --> Payment[Payment Worker]\n  Payment --> Provider[Payment Provider]\n  Payment -. timeout .-> Recon[Reconciliation Worker]\n  Recon --> Provider\n  Recon --> DB\n  Kafka --> Expiry[Expiry Worker]\n  Expiry --> DB\n  Expiry --> Buckets"
     },
     {
       "id": "verification",
-      "title": "Production Safety: Crashes, Uncertainty & Failover",
+      "title": "Verification",
       "points": [
-        "Crash and redelivery tests must prove one business trade, not one message.",
-        "On timeout, query broker state first; unresolved work stays UNKNOWN.",
-        "Unsubscribe writes a sequence fence; later work skips before broker submission.",
-        "Failover grants one region a fencing epoch and drains ambiguous lanes.",
-        "Replay repairs missing intents; alerts expose lag, drift, and broker failures."
+        "Duplicate request / Kafka redelivery：靠 clientRequestId、unique constraint 和 consumer idempotency 防止重复 order 或 charge。",
+        "Provider timeout：先 status query；仍然 UNKNOWN 时暂停 blind retry，交给 reconciliation 或 DLQ。",
+        "Crash after charge：用相同 idempotency key 查 Provider，并用 guarded transition 补写本地 PAID state。",
+        "Payment 与 expiry race：用 transaction 和状态条件只允许一个转换；late success 进入 refund / manual review。",
+        "同一 SKU 并发抢购：压测 stock invariant；检查 available + reserved + sold 不超过 total stock。",
+        "Traffic spike 或 DB overload：用 admission control、backpressure、worker autoscaling 和 query/connection 监控保护系统。",
+        "主要 trade-off：payment status 是 eventual consistency；换来更短 API latency 和更强 recovery。"
       ],
       "speakingNotes": [
-        "A worker crash after sending can leave the provider result unknown.",
-        "The worker checks broker history by the deterministic client ID.",
-        "If supported, it retries with the same ID; otherwise it stays UNKNOWN.",
-        "An unsubscribe records a clear cutover sequence number.",
-        "Existing in-flight calls may finish, but later events are skipped.",
-        "Failover waits for the old lease, then writes a higher epoch.",
-        "Old workers cannot update fenced state after losing ownership.",
-        "The same client ID protects against a late call at capable brokers.",
-        "Replay recreates missing intents from immutable lead events.",
-        "Alerts show queue lag, unknown age, broker errors, lease churn, and replication lag."
+        "现在检查 failure cases。",
+        "先看 duplicate request。",
+        "unique key 返回已有 order。",
+        "Kafka redelivery 也不能重复 charge。",
+        "Provider timeout 先 reconciliation，不做 blind retry。",
+        "Worker crash 后继续 query Provider。",
+        "支付和 expire 可能同时发生。",
+        "guarded transition 只允许一个结果。",
+        "late success 进入 refund。",
+        "流量过高时触发 backpressure。",
+        "压测同一 SKU 的并发抢购。",
+        "监控 lag、stock drift、UNKNOWN age。"
       ],
       "visual": ""
     },
     {
       "id": "wrap-up",
-      "title": "Recommendation: Durable, Ordered, Honest Exactly-Once",
+      "title": "Wrap-up",
       "points": [
-        "Use durable acceptance, ordered per-lead events, and parallel follower execution.",
-        "Trade immediate confirmation for recoverability, backpressure, and clear eventual status.",
-        "Require broker idempotency or lookup; otherwise stop safely at UNKNOWN."
+        "推荐 PostgreSQL transaction + stock buckets + Kafka outbox + idempotent payment 的组合。",
+        "它先保证 durable order 和安全库存，再用 async processing 快速响应用户。",
+        "主要 trade-off 是 payment eventual consistency 和更高的 reconciliation 复杂度；规模增长时可水平扩展 API、Worker 和 read path。"
       ],
       "speakingNotes": [
-        "My recommendation is asynchronous execution after durable acceptance.",
-        "Ordering stays local to each lead, while follower work scales out.",
-        "The trade-off is eventual status and more reconciliation work.",
-        "As volume grows, add fan-out shards and broker-specific capacity pools."
+        "最后总结一下。",
+        "先同步保存核心状态。",
+        "慢 payment 走 async processing。",
+        "idempotency 让 retry 安全。",
+        "payment status 可能最终一致。",
+        "规模增加时水平扩展 API 和 Worker。"
       ],
       "visual": ""
     }

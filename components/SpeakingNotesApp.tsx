@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
+import { useSectionScrollSync } from "@/components/useSectionScrollSync";
 import { useSyncedSection } from "@/components/useSyncedSection";
 import type { Assessment } from "@/types/assessment";
 
@@ -13,50 +14,14 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
     sectionRefs.current[id] = element;
   }, []);
 
-  useEffect(() => {
-    if (!syncReady || externalSection) return;
-
-    const elements = assessment.sections
-      .map((section) => sectionRefs.current[section.id])
-      .filter((element): element is HTMLElement => element !== null);
-    if (elements.length === 0) return;
-
-    const updateCurrentSection = () => {
-      const marker = window.scrollY + 112;
-      let currentId = elements[0].id;
-
-      elements.forEach((element) => {
-        const top = element.getBoundingClientRect().top + window.scrollY;
-        if (top <= marker) currentId = element.id;
-      });
-
-      const atDocumentEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
-      if (atDocumentEnd) currentId = elements[elements.length - 1].id;
-
-      setActiveSection(currentId);
-    };
-
-    window.addEventListener("scroll", updateCurrentSection, { passive: true });
-    window.addEventListener("resize", updateCurrentSection);
-    updateCurrentSection();
-
-    return () => {
-      window.removeEventListener("scroll", updateCurrentSection);
-      window.removeEventListener("resize", updateCurrentSection);
-    };
-  }, [assessment.sections, externalSection, setActiveSection, syncReady]);
-
-  useEffect(() => {
-    if (!externalSection) return;
-
-    document.getElementById(externalSection)?.scrollIntoView({ behavior: "auto", block: "start" });
-    clearExternalSection();
-  }, [clearExternalSection, externalSection]);
-
-  function navigateTo(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: "auto", block: "start" });
-    setActiveSection(id);
-  }
+  const navigateTo = useSectionScrollSync({
+    sections: assessment.sections,
+    sectionRefs,
+    setActiveSection,
+    externalSection,
+    clearExternalSection,
+    syncReady
+  });
 
   return (
     <div className="min-h-screen bg-paper">
