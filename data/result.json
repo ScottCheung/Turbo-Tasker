@@ -1,0 +1,113 @@
+{
+  "title": "Multi-Region Copy Trading: Ordered, Safe Fan-out",
+  "taskType": "System Design",
+  "summary": [
+    "Durably accept ordered lead events, then fan them out to many follower accounts.",
+    "Use per-lane idempotency, leases, and broker reconciliation for safe at-least-once processing.",
+    "Fail over with one execution owner while keeping accepted events replayable and auditable."
+  ],
+  "sections": [
+    {
+      "id": "understanding",
+      "title": "Scale, Guarantees & Failure Boundaries",
+      "points": [
+        "Handle 10,000 lead events per second, with one lead reaching 100,000 followers.",
+        "Preserve order per lead, while processing different leads in parallel.",
+        "Accepted events survive regional failure and show current follower trade status.",
+        "Safe recovery needs broker idempotency or a reliable result lookup."
+      ],
+      "speakingNotes": [
+        "I would first define the guarantee and the main limit.",
+        "The platform accepts an event only after durable cross-region storage.",
+        "Every lead event receives one monotonic sequence number.",
+        "Different leads can run in parallel, but one lead keeps order.",
+        "Workers may receive duplicate messages after crashes or retries.",
+        "A broker needs idempotency or reliable lookup to avoid duplicate trades."
+      ],
+      "visual": ""
+    },
+    {
+      "id": "approach",
+      "title": "Ordered Ledgers, Async Fan-out, Isolated Brokers",
+      "points": [
+        "Assign each lead a home region and one ordered event ledger.",
+        "Commit the event and outbox record before returning success.",
+        "Fan out followers in chunks, then run independent ordered lanes.",
+        "Apply broker quotas and backpressure outside the acceptance path."
+      ],
+      "speakingNotes": [
+        "I would separate fast acceptance from slow broker execution.",
+        "A home region assigns the sequence and owns normal processing.",
+        "A transactional outbox saves the event and publish request together.",
+        "A quorum commit completes before the API reports success.",
+        "The append-only ledger supports audit history and later replay.",
+        "Fan-out pages through large follower lists instead of one huge transaction.",
+        "Broker adapters hide different APIs and enforce per-broker capacity."
+      ],
+      "visual": ""
+    },
+    {
+      "id": "core-solution",
+      "title": "Core Flow: From Lead Event to Follower Trade",
+      "points": [
+        "Partition Kafka by leadId; the sequence number defines the event order.",
+        "Create unique, queryable intents for each event, follower, and action version.",
+        "Advance a lead–follower lane only after a terminal result.",
+        "Send a deterministic client order ID through every broker retry.",
+        "Read status from intents and reconcile uncertain provider results."
+      ],
+      "speakingNotes": [
+        "The event ledger is the source for replay and audit.",
+        "Kafka preserves order for each lead, not one global stream.",
+        "Fan-out snapshots active subscriptions at the event sequence.",
+        "It writes intents with a unique event and follower key.",
+        "The intent state can be pending, executed, rejected, unknown, or skipped.",
+        "The lane pointer blocks the next event until this one finishes.",
+        "This protects order when fan-out batches finish at different times.",
+        "The adapter sends the same client ID on every retry.",
+        "The status page reads durable intents, so users see current progress."
+      ],
+      "visual": "flowchart LR\n  Client[Lead and Follower API] --> Gateway[Global Gateway]\n  Gateway --> Router[Lead Home Router]\n  Router --> Ledger[(Ordered Event Ledger)]\n  Router --> Outbox[(Transactional Outbox)]\n  Outbox --> Log[(Geo-replicated Kafka)]\n  Log --> Fanout[Chunked Fan-out]\n  Fanout --> Intent[(Copy Intent Store)]\n  Intent --> Lane[Per-lane Executor]\n  Lane --> Fence[(Lease + Epoch Store)]\n  Lane --> Adapter[Broker Adapter]\n  Adapter --> Broker[External Broker]\n  Gateway --> Status[Status API]\n  Status --> Intent\n  Adapter -. ambiguous timeout .-> Recon[Reconciliation Worker]\n  Recon --> Broker\n  Recon --> Intent\n  Failover[Failover Controller] --> Fence"
+    },
+    {
+      "id": "verification",
+      "title": "Production Safety: Crashes, Uncertainty & Failover",
+      "points": [
+        "Crash and redelivery tests must prove one business trade, not one message.",
+        "On timeout, query broker state first; unresolved work stays UNKNOWN.",
+        "Unsubscribe writes a sequence fence; later work skips before broker submission.",
+        "Failover grants one region a fencing epoch and drains ambiguous lanes.",
+        "Replay repairs missing intents; alerts expose lag, drift, and broker failures."
+      ],
+      "speakingNotes": [
+        "A worker crash after sending can leave the provider result unknown.",
+        "The worker checks broker history by the deterministic client ID.",
+        "If supported, it retries with the same ID; otherwise it stays UNKNOWN.",
+        "An unsubscribe records a clear cutover sequence number.",
+        "Existing in-flight calls may finish, but later events are skipped.",
+        "Failover waits for the old lease, then writes a higher epoch.",
+        "Old workers cannot update fenced state after losing ownership.",
+        "The same client ID protects against a late call at capable brokers.",
+        "Replay recreates missing intents from immutable lead events.",
+        "Alerts show queue lag, unknown age, broker errors, lease churn, and replication lag."
+      ],
+      "visual": ""
+    },
+    {
+      "id": "wrap-up",
+      "title": "Recommendation: Durable, Ordered, Honest Exactly-Once",
+      "points": [
+        "Use durable acceptance, ordered per-lead events, and parallel follower execution.",
+        "Trade immediate confirmation for recoverability, backpressure, and clear eventual status.",
+        "Require broker idempotency or lookup; otherwise stop safely at UNKNOWN."
+      ],
+      "speakingNotes": [
+        "My recommendation is asynchronous execution after durable acceptance.",
+        "Ordering stays local to each lead, while follower work scales out.",
+        "The trade-off is eventual status and more reconciliation work.",
+        "As volume grows, add fan-out shards and broker-specific capacity pools."
+      ],
+      "visual": ""
+    }
+  ]
+}

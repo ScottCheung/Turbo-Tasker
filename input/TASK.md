@@ -1,41 +1,34 @@
-Design a production-grade backend system for a multi-region copy trading platform.
+Design a production-grade backend system for a flash-sale e-commerce platform.
 
-Users can follow one or more lead traders.
-
-When a lead trader places, modifies, or cancels an order, the platform should copy that action to thousands of follower accounts.
+Users can browse products, add items to their cart, and place orders during a flash sale.
 
 Requirements:
 
-- A lead trader may have up to 100,000 followers.
-- The platform should support 10,000 lead-trader events per second globally.
-- Followers may use different external brokers.
-- Broker APIs can be slow, rate-limited, unavailable, or return ambiguous timeouts.
-- The same trade must never be executed twice for the same follower.
-- Events for the same lead trader must be processed in the correct order.
-- Events for different lead traders may be processed in parallel.
-- A follower may stop copying a trader while some events are still being processed.
-- Users must be able to see the current copy status for each trade.
-- The system must survive worker crashes, broker outages, message redelivery, and temporary database failures.
-- The service is deployed in multiple regions.
-- A regional outage should not cause accepted trading events to be lost.
-- During failover, the system must avoid two regions executing the same follower trade.
-- The design should support replay and reconciliation if internal state differs from the broker.
-- Audit history must be retained for compliance.
-- The system should provide useful operational metrics and alerts.
+- A flash sale may attract up to 100,000 users at the same time.
+- Product stock is limited and must never be oversold.
+- Users should receive an order response quickly.
+- Payment is handled by an external payment provider.
+- The payment provider may be slow, unavailable, or return a timeout.
+- The same order must not be charged twice.
+- An order should expire if payment is not completed within 10 minutes.
+- If payment succeeds but the order service crashes, the system must recover safely.
+- If payment fails or expires, reserved stock should be released.
+- Users should be able to check order and payment status.
+- The system should support retries without creating duplicate orders or duplicate payments.
+- The service should handle sudden traffic spikes during the flash sale.
+- Order history must remain auditable.
 
 Explain:
 
-1. Your assumptions and the guarantees you would provide.
+1. Your assumptions and main guarantees.
 2. Your high-level architecture.
-3. How you would partition and order events.
-4. How you would fan out one lead-trader event to many followers.
-5. How you would prevent duplicate follower executions.
-6. How you would handle broker timeouts and unknown execution results.
-7. How you would handle a follower unsubscribing during processing.
-8. How multi-region failover would work safely.
-9. How you would replay or reconcile inconsistent state.
-10. Your main scalability, reliability, and consistency trade-offs.
+3. How you prevent overselling.
+4. How you reserve and release stock.
+5. How order creation and payment should work.
+6. How you prevent duplicate orders and duplicate charges.
+7. How you handle payment timeouts or unknown payment results.
+8. How expired unpaid orders release inventory.
+9. How the system handles traffic spikes and failures.
+10. Your main scalability and consistency trade-offs.
 
 You have approximately 15 minutes to explain your solution.
-
-Do not assume true distributed exactly-once execution is available.
