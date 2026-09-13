@@ -112,6 +112,7 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
   return (
     <div className="min-h-screen bg-paper">
       <Header
+        title={assessment.title}
         taskType={assessment.taskType}
         currentSection={currentSection}
         totalRemaining={totalRemaining}
@@ -124,7 +125,7 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
         <Sidebar sections={assessment.sections} activeSection={activeSection} onNavigate={navigateTo} />
 
         <main className="min-w-0 flex-1 overflow-x-clip px-5 lg:px-12 xl:px-16">
-          <div className="mx-auto w-full max-w-[1400px]">
+          <div className="mx-auto w-full max-w-[1040px]">
             {assessment.sections.map((section) => (
               <Section key={section.id} section={section} registerSection={registerSection} />
             ))}

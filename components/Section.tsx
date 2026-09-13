@@ -26,7 +26,7 @@ export default function Section({ section, registerSection }: SectionProps) {
           section.visual ? "grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.9fr)] lg:gap-14" : ""
         }`}
       >
-        <ul className={`grid gap-x-12 gap-y-7 ${section.visual ? "sm:grid-cols-2 lg:grid-cols-1" : "sm:grid-cols-2"}`}>
+        <ul className={`grid gap-y-7 ${section.visual ? "max-w-[430px]" : "max-w-[880px]"}`}>
           {section.points.map((point) => (
             <li
               key={point}

@@ -1,6 +1,7 @@
 import Timer from "@/components/Timer";
 
 type HeaderProps = {
+  title: string;
   taskType: string;
   currentSection: string;
   totalRemaining: number;
@@ -10,6 +11,7 @@ type HeaderProps = {
 };
 
 export default function Header({
+  title,
   taskType,
   currentSection,
   totalRemaining,
@@ -21,14 +23,11 @@ export default function Header({
     <header className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur-sm">
       <div className="mx-auto grid min-h-[72px] max-w-[1728px] grid-cols-1 items-center gap-3 px-5 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_auto] md:gap-8 lg:px-8">
         <div className="min-w-0">
-          <p className="text-[clamp(0.68rem,0.58rem+0.15vw,0.82rem)] font-bold uppercase tracking-[0.16em] text-muted">Task type</p>
-          <p className="mt-1 truncate text-[clamp(0.98rem,0.84rem+0.35vw,1.2rem)] font-semibold text-ink">{taskType}</p>
+          <p className="mt-1 truncate text-[clamp(0.98rem,0.84rem+0.35vw,1.2rem)] font-semibold text-ink">{title}</p>
+          <p className="text-[clamp(0.68rem,0.58rem+0.15vw,0.82rem)] font-bold uppercase tracking-[0.16em] text-muted">{taskType}</p>
+          
         </div>
 
-        <div className="min-w-0 md:text-center">
-          <p className="text-[clamp(0.68rem,0.58rem+0.15vw,0.82rem)] font-bold uppercase tracking-[0.16em] text-muted">Current section</p>
-          <p className="mt-1 truncate text-[clamp(0.98rem,0.84rem+0.35vw,1.2rem)] font-semibold text-accent">{currentSection}</p>
-        </div>
 
         <div className="flex items-end justify-between gap-4 md:justify-end">
           <div className="text-left md:text-right">

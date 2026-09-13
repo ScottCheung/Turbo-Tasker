@@ -1,24 +1,24 @@
 {
-  "title": "Backend Trading System",
+  "title": "Reliable Trade Order Processing",
   "taskType": "Backend Design",
   "summary": [
-    "Receive trading requests through a simple API.",
-    "Persist reliable state as the source of truth.",
-    "Process background work asynchronously and safely."
+    "Accept buy and sell orders quickly with a stable order ID.",
+    "Persist order state before any asynchronous execution begins.",
+    "Make retries safe while scaling to 5,000 requests per second."
   ],
   "sections": [
     {
       "id": "understanding",
       "title": "Understanding",
       "points": [
-        "Clarify the request lifecycle from acceptance to completion.",
-        "Identify durability, latency, throughput, and consistency requirements.",
-        "Define the states, inputs, outputs, and failure boundaries."
+        "The API accepts buy or sell orders and returns quickly with an order ID.",
+        "Every accepted order must be durable and observable through a status endpoint.",
+        "The system must prevent duplicate execution at 5,000 requests per second despite provider failures."
       ],
       "speakingNotes": [
-        "I would first confirm what must be synchronous and what can happen later.",
-        "The important contract is the request state and how a caller observes it.",
-        "I would make the reliability and scale assumptions explicit before choosing components."
+        "I would clarify that quick API response means acknowledgement, not synchronous execution.",
+        "The order ID and status contract let users follow progress after the request returns.",
+        "The hardest requirement is safe recovery when an external provider may have accepted an order before timing out."
       ],
       "visual": ""
     },
@@ -26,14 +26,14 @@
       "id": "approach",
       "title": "Approach",
       "points": [
-        "Keep the synchronous API path small and predictable.",
-        "Persist durable state before starting background work.",
-        "Use explicit, idempotent state transitions so retries are safe."
+        "Use a stateless API to validate, authenticate, and durably accept each order.",
+        "Separate order acceptance from execution with a transactional outbox and durable queue.",
+        "Treat execution as an idempotent state machine with explicit recovery for ambiguous outcomes."
       ],
       "speakingNotes": [
-        "I would separate accepting a request from doing the long-running work.",
-        "The database becomes the source of truth before an event is published.",
-        "This keeps the first version easy to operate while leaving room to scale."
+        "The API path should do only validation and the minimum durable write needed to accept the order.",
+        "The outbox prevents a committed order from being lost if the service crashes before publishing work.",
+        "Workers can retry, but they must reconcile an uncertain provider result before sending again."
       ],
       "visual": ""
     },
@@ -41,30 +41,30 @@
       "id": "core-solution",
       "title": "Core Solution",
       "points": [
-        "Validate and authenticate requests at a stateless API boundary.",
-        "Store request state in PostgreSQL with an idempotency key.",
-        "Publish work through a transactional outbox after the write commits.",
-        "Let workers consume events, apply the side effect, and update status."
+        "Store orders with a unique client idempotency key and an explicit state machine in PostgreSQL.",
+        "Commit the order and an outbox event in one transaction, then publish the event to a durable queue.",
+        "Workers claim orders with leases and send the provider the same idempotency key on every retry.",
+        "On a timeout, reconcile with the provider before retrying; record execution and status transitions durably."
       ],
       "speakingNotes": [
-        "The API acknowledges only after the initial state is durable.",
-        "The outbox closes the gap between a database commit and event publication.",
-        "Workers can retry safely because the request and transition are idempotent."
+        "A unique constraint makes concurrent duplicate submissions return the original order rather than create another one.",
+        "At-least-once delivery is acceptable when both the worker and the provider call are idempotent.",
+        "The ambiguous timeout state is important: blindly retrying could execute a trade twice."
       ],
-      "visual": "flowchart LR\n  Client --> API\n  API --> DB[(PostgreSQL)]\n  API --> Outbox\n  Outbox --> Worker\n  Worker --> DB"
+      "visual": "flowchart LR\n  Client --> API\n  API --> Orders[(PostgreSQL)]\n  API --> Outbox[(Outbox)]\n  Outbox --> Queue[(Durable Queue)]\n  Queue --> Worker\n  Worker --> Provider[Execution Provider]\n  Worker --> Reconcile[Reconcile]\n  Reconcile --> Provider\n  Worker --> Orders"
     },
     {
       "id": "verification",
       "title": "Verification",
       "points": [
-        "Test duplicate requests, duplicate events, and concurrent worker claims.",
-        "Verify retries, dead-letter handling, and recovery from partial failure.",
-        "Monitor queue lag, processing latency, error rate, and stuck states."
+        "Test concurrent duplicate requests, duplicate queue messages, worker crashes, and lease expiry.",
+        "Test provider success, rejection, timeout after acceptance, and repeated reconciliation.",
+        "Load test 5,000 requests per second and monitor API latency, queue lag, database saturation, and stuck orders."
       ],
       "speakingNotes": [
-        "I would start with the failure cases because they define whether retries are safe.",
-        "The key tests cover duplicate delivery, database failure, and worker restarts.",
-        "Operational signals should show both customer impact and where work is stuck."
+        "I would test the crash windows around the database commit, queue publish, and provider response.",
+        "The most important assertion is one business execution, even when the same message is delivered repeatedly.",
+        "Capacity testing must include the database and provider limits, not only the API tier."
       ],
       "visual": ""
     },
@@ -72,14 +72,14 @@
       "id": "wrap-up",
       "title": "Wrap-up",
       "points": [
-        "Start with a small stateless API, one database, and one worker pool.",
-        "Scale API, queue consumers, and storage independently as demand grows.",
-        "Keep ownership of every state transition clear and auditable."
+        "Return quickly from a durable acceptance path, then process execution asynchronously.",
+        "Use idempotency, reconciliation, and explicit unknown states to make partial failures safe.",
+        "Scale stateless APIs and workers independently, while keeping PostgreSQL the order-state source of truth."
       ],
       "speakingNotes": [
-        "The design optimises first for durable state and safe recovery.",
-        "I would add capacity and operational complexity only when measurements require it.",
-        "The same five-part structure can carry a coding, debugging, database, or analysis answer."
+        "The design prioritises durable acceptance and safe recovery over pretending every network call is exactly once.",
+        "True no-duplicate execution requires the provider to support idempotency or a reliable reconciliation API.",
+        "I would start with this flow, measure queue and provider bottlenecks, and scale the independent tiers as needed."
       ],
       "visual": ""
     }

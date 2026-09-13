@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import Sidebar from "@/components/Sidebar";
 import { useSyncedSection } from "@/components/useSyncedSection";
 import type { Assessment } from "@/types/assessment";
 
@@ -84,47 +83,43 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-[1728px] flex-col overflow-x-clip lg:flex-row">
-        <Sidebar sections={assessment.sections} activeSection={activeSection} onNavigate={navigateTo} />
-
-        <main className="min-w-0 flex-1 overflow-x-clip px-5 lg:px-12 xl:px-16">
-          <div className="mx-auto w-full max-w-[1400px]">
-            {assessment.sections.map((section) => (
-              <section
-                key={section.id}
-                id={section.id}
-                ref={(element) => registerSection(section.id, element)}
-                className="flex min-h-[calc(100dvh-88px)] max-md:min-h-[calc(100dvh-136px)] scroll-mt-24 max-md:scroll-mt-36 flex-col justify-center overflow-x-clip py-12 lg:py-16"
-                aria-labelledby={`${section.id}-notes-title`}
+      <main className="min-w-0 overflow-x-clip px-5 lg:px-12 xl:px-16">
+        <div className="mx-auto w-full max-w-[860px]">
+          {assessment.sections.map((section) => (
+            <section
+              key={section.id}
+              id={section.id}
+              ref={(element) => registerSection(section.id, element)}
+              className="flex min-h-[calc(100dvh-88px)] max-md:min-h-[calc(100dvh-136px)] scroll-mt-24 max-md:scroll-mt-36 flex-col justify-center overflow-x-clip py-12 lg:py-16"
+              aria-labelledby={`${section.id}-notes-title`}
+            >
+              <p className="mb-3 text-[clamp(0.72rem,0.62rem+0.15vw,0.86rem)] font-bold uppercase tracking-[0.2em] text-accent">
+                Speaking notes
+              </p>
+              <h2
+                id={`${section.id}-notes-title`}
+                className="text-[clamp(1.9rem,1.35rem+1.35vw,2.85rem)] font-semibold tracking-[-0.025em] text-ink"
               >
-                <p className="mb-3 text-[clamp(0.72rem,0.62rem+0.15vw,0.86rem)] font-bold uppercase tracking-[0.2em] text-accent">
-                  Speaking notes
-                </p>
-                <h2
-                  id={`${section.id}-notes-title`}
-                  className="text-[clamp(1.9rem,1.35rem+1.35vw,2.85rem)] font-semibold tracking-[-0.025em] text-ink"
-                >
-                  {section.title}
-                </h2>
+                {section.title}
+              </h2>
 
-                <ul className="mt-[clamp(2.25rem,6vh,4.5rem)] grid gap-x-12 gap-y-7 sm:grid-cols-2">
-                  {section.speakingNotes.map((note, noteIndex) => (
-                    <li
-                      key={note}
-                      className="flex gap-4 border-l-2 border-accent pl-4 text-[clamp(1.06rem,0.9rem+0.4vw,1.35rem)] leading-[1.65] text-ink"
-                    >
-                      <span className="shrink-0 font-mono text-[clamp(0.7rem,0.62rem+0.12vw,0.84rem)] font-semibold text-accent">
-                        {String(noteIndex + 1).padStart(2, "0")}
-                      </span>
-                      <span>{note}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        </main>
-      </div>
+              <ul className="mt-[clamp(2.25rem,6vh,4.5rem)] grid max-w-[820px] gap-y-9">
+                {section.speakingNotes.map((note, noteIndex) => (
+                  <li
+                    key={note}
+                    className="flex gap-4 border-l-2 border-accent pl-4 text-[clamp(1.16rem,1rem+0.45vw,1.5rem)] leading-[1.75] text-ink"
+                  >
+                    <span className="shrink-0 font-mono text-[clamp(0.7rem,0.62rem+0.12vw,0.84rem)] font-semibold text-accent">
+                      {String(noteIndex + 1).padStart(2, "0")}
+                    </span>
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </main>
     </div>
   );
 }
