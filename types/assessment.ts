@@ -1,10 +1,9 @@
 export type AssessmentSection = {
   id: string;
   title: string;
-  timePercent: number;
   points: string[];
   speakingNotes: string[];
-  diagram: string;
+  visual: string;
 };
 
 export type Assessment = {

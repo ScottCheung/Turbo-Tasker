@@ -6,9 +6,9 @@ import { useSyncedSection } from "@/components/useSyncedSection";
 import type { Assessment } from "@/types/assessment";
 
 export default function SpeakingNotesApp({ assessment }: { assessment: Assessment }) {
-  const { activeSection, setActiveSection, externalSection, clearExternalSection, syncReady } = useSyncedSection("summary");
+  const firstSectionId = assessment.sections[0]?.id ?? "understanding";
+  const { activeSection, setActiveSection, externalSection, clearExternalSection, syncReady } = useSyncedSection(firstSectionId);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
-  const summaryRef = useRef<HTMLElement | null>(null);
 
   const registerSection = useCallback((id: string, element: HTMLElement | null) => {
     sectionRefs.current[id] = element;
@@ -17,9 +17,9 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
   useEffect(() => {
     if (!syncReady || externalSection) return;
 
-    const elements = [summaryRef.current, ...assessment.sections.map((section) => sectionRefs.current[section.id])].filter(
-      (element): element is HTMLElement => element !== null
-    );
+    const elements = assessment.sections
+      .map((section) => sectionRefs.current[section.id])
+      .filter((element): element is HTMLElement => element !== null);
     if (elements.length === 0) return;
 
     const updateCurrentSection = () => {
@@ -85,39 +85,16 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
       </header>
 
       <div className="mx-auto flex max-w-[1728px] flex-col overflow-x-clip lg:flex-row">
-        <Sidebar
-          sections={assessment.sections}
-          activeSection={activeSection}
-          sectionProgress={0}
-          showProgress={false}
-          onNavigate={navigateTo}
-        />
+        <Sidebar sections={assessment.sections} activeSection={activeSection} onNavigate={navigateTo} />
 
         <main className="min-w-0 flex-1 overflow-x-clip px-5 lg:px-12 xl:px-16">
           <div className="mx-auto w-full max-w-[1400px]">
-            <section
-              id="summary"
-              ref={summaryRef}
-              className="flex min-h-[calc(100dvh-88px)] max-md:min-h-[calc(100dvh-136px)] snap-start scroll-mt-24 max-md:scroll-mt-36 flex-col justify-center py-10 lg:py-14"
-              aria-labelledby="notes-title"
-            >
-              <p className="mb-3 text-[clamp(0.78rem,0.65rem+0.2vw,0.95rem)] font-bold uppercase tracking-[0.22em] text-accent">
-                Companion view
-              </p>
-              <h1 id="notes-title" className="text-[clamp(2.2rem,1.55rem+2vw,3.6rem)] font-semibold tracking-[-0.03em] text-ink">
-                Speaking Notes
-              </h1>
-              <p className="mt-5 max-w-3xl text-[clamp(1rem,0.84rem+0.35vw,1.25rem)] leading-[1.7] text-muted">
-                Keep this page beside the assessment. The highlighted section and scroll position stay synchronized with the main view.
-              </p>
-            </section>
-
             {assessment.sections.map((section) => (
               <section
                 key={section.id}
                 id={section.id}
                 ref={(element) => registerSection(section.id, element)}
-                className="flex min-h-[calc(100dvh-88px)] max-md:min-h-[calc(100dvh-136px)] snap-start scroll-mt-24 max-md:scroll-mt-36 flex-col justify-center overflow-x-clip py-10 lg:py-14"
+                className="flex min-h-[calc(100dvh-88px)] max-md:min-h-[calc(100dvh-136px)] scroll-mt-24 max-md:scroll-mt-36 flex-col justify-center overflow-x-clip py-12 lg:py-16"
                 aria-labelledby={`${section.id}-notes-title`}
               >
                 <p className="mb-3 text-[clamp(0.72rem,0.62rem+0.15vw,0.86rem)] font-bold uppercase tracking-[0.2em] text-accent">
@@ -125,16 +102,16 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
                 </p>
                 <h2
                   id={`${section.id}-notes-title`}
-                  className="text-[clamp(1.75rem,1.2rem+1.25vw,2.7rem)] font-semibold tracking-[-0.02em] text-ink"
+                  className="text-[clamp(1.9rem,1.35rem+1.35vw,2.85rem)] font-semibold tracking-[-0.025em] text-ink"
                 >
                   {section.title}
                 </h2>
 
-                <ul className="mt-[clamp(2.5rem,7vh,5.5rem)] grid gap-x-12 gap-y-7 sm:grid-cols-2">
+                <ul className="mt-[clamp(2.25rem,6vh,4.5rem)] grid gap-x-12 gap-y-7 sm:grid-cols-2">
                   {section.speakingNotes.map((note, noteIndex) => (
                     <li
                       key={note}
-                      className="flex gap-4 border-l-2 border-accent pl-4 text-[clamp(1.08rem,0.9rem+0.4vw,1.4rem)] leading-[1.7] text-ink"
+                      className="flex gap-4 border-l-2 border-accent pl-4 text-[clamp(1.06rem,0.9rem+0.4vw,1.35rem)] leading-[1.65] text-ink"
                     >
                       <span className="shrink-0 font-mono text-[clamp(0.7rem,0.62rem+0.12vw,0.84rem)] font-semibold text-accent">
                         {String(noteIndex + 1).padStart(2, "0")}

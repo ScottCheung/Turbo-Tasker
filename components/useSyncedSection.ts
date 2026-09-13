@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const STORAGE_KEY = "assessment-copilot-active-section";
+const STORAGE_KEY = "assessment-copilot-active-section-v2";
 const CHANNEL_NAME = "assessment-copilot-section-sync";
 
 type SectionMessage = {
