@@ -55,5 +55,5 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
     return <div className="h-24 animate-pulse rounded-md bg-slate-100" aria-label="Loading diagram" />;
   }
 
-  return <div className="mermaid overflow-x-auto" dangerouslySetInnerHTML={{ __html: svg }} />;
+  return <div className="mermaid overflow-x-clip" dangerouslySetInnerHTML={{ __html: svg }} />;
 }

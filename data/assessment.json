@@ -14,7 +14,12 @@
       "points": [
         "Keep synchronous work minimal.",
         "Persist state before background processing.",
-        "Process asynchronous work with reliable workers."
+        "Process asynchronous work with reliable workers.",
+        "Separate request acceptance from long-running execution.",
+        "Require an idempotency key at the API boundary.",
+        "Make state transitions explicit and auditable.",
+        "Return a stable request identifier immediately.",
+        "Define recovery paths before optimising throughput."
       ],
       "speakingNotes": [
         "I would keep the API simple and make the write durable.",
@@ -30,7 +35,11 @@
         "The API validates incoming requests.",
         "PostgreSQL stores the durable system state.",
         "Kafka carries events for asynchronous processing.",
-        "Workers process jobs independently and can scale horizontally."
+        "Workers process jobs independently and can scale horizontally.",
+        "Use a transactional outbox to bridge state and event publication.",
+        "Keep the API stateless so instances scale horizontally.",
+        "Apply authentication and rate limits before expensive work.",
+        "Expose health, metrics, and tracing outside the request path."
       ],
       "speakingNotes": [
         "The request first reaches the API for validation.",
@@ -47,7 +56,11 @@
         "Validate the request and authenticate the caller.",
         "Persist the request and its initial state.",
         "Publish an event after the state is durable.",
-        "Let a worker process the event and update status."
+        "Let a worker process the event and update status.",
+        "Include the idempotency key in the persisted request.",
+        "Claim work atomically so only one worker advances the request.",
+        "Record each transition with a timestamp and failure reason.",
+        "Retry transient failures without creating a second request."
       ],
       "speakingNotes": [
         "I will walk through one request from the client inward.",
@@ -64,7 +77,11 @@
         "PostgreSQL is the source of truth.",
         "Workers must be idempotent.",
         "Events need retries and dead-letter handling.",
-        "The API stays stateless for straightforward scaling."
+        "The API stays stateless for straightforward scaling.",
+        "Prefer at-least-once delivery with idempotent consumers.",
+        "Use schema versions so producers and consumers evolve safely.",
+        "Keep the outbox in the same transaction as the state change.",
+        "Measure queue lag and processing latency as operating signals."
       ],
       "speakingNotes": [
         "The key decision is to optimise for durable state.",
@@ -81,7 +98,11 @@
         "Duplicate events can trigger repeated work.",
         "Worker failures can leave requests in progress.",
         "Database failures can affect both reads and writes.",
-        "Operational visibility is needed for stuck jobs."
+        "Operational visibility is needed for stuck jobs.",
+        "Queue bursts can increase latency during market volatility.",
+        "Poison messages can repeatedly consume worker capacity.",
+        "External side effects can partially succeed before a retry.",
+        "Schema changes can break older consumers unexpectedly."
       ],
       "speakingNotes": [
         "Failures are expected in production, so retries must be safe.",
@@ -98,7 +119,11 @@
         "Use a simple synchronous API at the edge.",
         "Keep durable state in a reliable database.",
         "Move slow work to retryable asynchronous workers.",
-        "Scale each part independently as demand grows."
+        "Scale each part independently as demand grows.",
+        "Idempotency and an outbox make retries safe.",
+        "Observability makes stuck requests diagnosable.",
+        "Start with one worker pool and scale by workload.",
+        "Preserve clear ownership of every state transition."
       ],
       "speakingNotes": [
         "Overall I would optimise for reliability and clear ownership.",

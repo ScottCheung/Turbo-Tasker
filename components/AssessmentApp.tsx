@@ -15,11 +15,6 @@ const STORAGE_KEYS = {
   mainAnswerDuration: "mainAnswerDuration"
 } as const;
 
-type SectionTiming = {
-  remaining: number;
-  over: boolean;
-};
-
 function storedTimestamp(key: string) {
   const value = window.sessionStorage.getItem(key);
   if (!value) return null;
@@ -42,7 +37,6 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
   const [activeSection, setActiveSection] = useState("summary");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const summaryRef = useRef<HTMLElement | null>(null);
-  const navigationTarget = useRef<{ id: string; token: number } | null>(null);
 
   useEffect(() => {
     const savedAssessmentStart = storedTimestamp(STORAGE_KEYS.assessmentStartedAt);
@@ -69,10 +63,12 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
   const mainAnswerStarted = mainAnswerStartedAt !== null && mainAnswerDuration !== null;
   const totalRemaining = assessmentEndAt === null ? TOTAL_DURATION_MS : Math.max(0, assessmentEndAt - now);
 
-  const sectionTimings = useMemo(() => {
-    const timings = new Map<string, SectionTiming>();
+  const sectionProgressById = useMemo(() => {
+    const progressById = new Map<string, number>();
+
     if (!mainAnswerStarted || mainAnswerStartedAt === null || mainAnswerDuration === null) {
-      return timings;
+      assessment.sections.forEach((section) => progressById.set(section.id, 100));
+      return progressById;
     }
 
     const elapsed = Math.max(0, now - mainAnswerStartedAt);
@@ -80,22 +76,17 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
 
     assessment.sections.forEach((section) => {
       const duration = Math.round((mainAnswerDuration * section.timePercent) / 100);
-      const rawRemaining = elapsed < sectionOffset ? duration : sectionOffset + duration - elapsed;
-      timings.set(section.id, {
-        remaining: Math.abs(rawRemaining),
-        over: rawRemaining < 0
-      });
+      const rawRemaining = sectionOffset + duration - elapsed;
+      const progress = duration > 0 ? Math.max(0, Math.min(100, (rawRemaining / duration) * 100)) : 0;
+
+      progressById.set(section.id, progress);
       sectionOffset += duration;
     });
 
-    return timings;
+    return progressById;
   }, [assessment.sections, mainAnswerDuration, mainAnswerStarted, mainAnswerStartedAt, now]);
 
-  const activeTitle =
-    activeSection === "summary"
-      ? "Summary"
-      : assessment.sections.find((section) => section.id === activeSection)?.title ?? "Summary";
-  const activeTiming = sectionTimings.get(activeSection);
+  const activeSectionProgress = sectionProgressById.get(activeSection) ?? 0;
 
   const registerSection = useCallback((id: string, element: HTMLElement | null) => {
     sectionRefs.current[id] = element;
@@ -108,33 +99,30 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
     if (elements.length === 0) return;
 
     const updateCurrentSection = () => {
-      if (navigationTarget.current) return;
+      // Use section start positions instead of intersection ratios. This keeps the
+      // active item stable when a section is tall and guarantees the last item is
+      // selected at the bottom of the document.
+      const marker = window.scrollY + 112;
+      let currentId = elements[0].id;
 
-      const marker = Math.min(280, window.innerHeight * 0.35);
-      const current = elements
-        .map((element) => ({
-          id: element.id,
-          top: element.getBoundingClientRect().top,
-          bottom: element.getBoundingClientRect().bottom
-        }))
-        .filter(({ top, bottom }) => top <= marker && bottom > 90)
-        .sort((a, b) => b.top - a.top)[0];
+      elements.forEach((element) => {
+        const top = element.getBoundingClientRect().top + window.scrollY;
+        if (top <= marker) currentId = element.id;
+      });
 
-      if (current) setActiveSection(current.id);
+      const atDocumentEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+      if (atDocumentEnd) currentId = elements[elements.length - 1].id;
+
+      setActiveSection((current) => (current === currentId ? current : currentId));
     };
 
-    const observer = new IntersectionObserver(updateCurrentSection, {
-      rootMargin: "-14% 0px -66% 0px",
-      threshold: [0, 0.25, 0.5, 0.75, 1]
-    });
-
-    elements.forEach((element) => observer.observe(element));
     window.addEventListener("scroll", updateCurrentSection, { passive: true });
+    window.addEventListener("resize", updateCurrentSection);
     updateCurrentSection();
 
     return () => {
-      observer.disconnect();
       window.removeEventListener("scroll", updateCurrentSection);
+      window.removeEventListener("resize", updateCurrentSection);
     };
   }, [assessment.sections]);
 
@@ -177,93 +165,104 @@ export default function AssessmentApp({ assessment }: { assessment: Assessment }
     setActiveSection("summary");
   }
 
+  function start() {
+    if (!assessmentStarted) {
+      startAssessment();
+      return;
+    }
+
+    startMainAnswer();
+  }
+
   function navigateTo(id: string) {
-    const token = Date.now();
-    navigationTarget.current = { id, token };
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveSection(id);
-    window.setTimeout(() => {
-      if (navigationTarget.current?.token === token) {
-        navigationTarget.current = null;
-        setActiveSection(id);
-      }
-    }, 1200);
   }
 
   return (
     <div className="min-h-screen bg-paper">
       <Header
         totalRemaining={totalRemaining}
-        currentTitle={activeTitle}
-        sectionRemaining={activeTiming?.remaining ?? null}
-        sectionOver={activeTiming?.over ?? false}
         assessmentStarted={assessmentStarted}
-        mainAnswerStarted={mainAnswerStarted}
         canStartMainAnswer={assessmentStarted && !mainAnswerStarted && totalRemaining > 0}
-        onStartAssessment={startAssessment}
-        onStartMainAnswer={startMainAnswer}
+        onStart={start}
         onReset={resetAssessment}
       />
 
-      <div className="mx-auto flex max-w-[1440px] flex-col lg:flex-row">
-        <Sidebar sections={assessment.sections} activeSection={activeSection} onNavigate={navigateTo} />
+      <div className="mx-auto flex max-w-[1728px] flex-col overflow-x-clip lg:flex-row">
+        <Sidebar
+          sections={assessment.sections}
+          activeSection={activeSection}
+          sectionProgress={activeSectionProgress}
+          sectionProgressById={sectionProgressById}
+          onNavigate={navigateTo}
+        />
 
-        <main className="min-w-0 flex-1 px-5 pb-24 lg:px-12 xl:px-16">
-          <section
-            id="summary"
-            ref={summaryRef}
-            className="scroll-mt-24 border-b border-line py-10 lg:py-14"
-            aria-labelledby="assessment-title"
-          >
-            <div className="flex flex-col justify-between gap-8 xl:flex-row xl:gap-16">
-              <div className="max-w-3xl">
-                <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.22em] text-accent">15-minute technical assessment</p>
-                <h1 id="assessment-title" className="text-3xl font-semibold tracking-[-0.03em] text-ink sm:text-4xl">
-                  {assessment.title}
-                </h1>
-                <p className="mt-3 text-sm font-medium text-muted">{assessment.taskType}</p>
+        <main className="min-w-0 flex-1 overflow-x-clip px-5 lg:px-12 xl:px-16">
+          <div className="mx-auto w-full max-w-[1400px]">
+            <section
+              id="summary"
+              ref={summaryRef}
+              className="flex min-h-[calc(100dvh-88px)] max-md:min-h-[calc(100dvh-136px)] snap-start scroll-mt-24 max-md:scroll-mt-36 flex-col justify-center py-10 lg:py-14"
+              aria-labelledby="assessment-title"
+            >
+              <div className="flex flex-col justify-between gap-8 xl:flex-row xl:gap-16">
+                <div className="min-w-0 flex-1">
+                  <p className="mb-3 text-[clamp(0.78rem,0.65rem+0.2vw,0.95rem)] font-bold uppercase tracking-[0.22em] text-accent">
+                    15-minute technical assessment
+                  </p>
+                  <h1
+                    id="assessment-title"
+                    className="text-[clamp(2.2rem,1.55rem+2vw,3.6rem)] font-semibold tracking-[-0.03em] text-ink"
+                  >
+                    {assessment.title}
+                  </h1>
+                  <p className="mt-3 text-[clamp(1rem,0.84rem+0.35vw,1.25rem)] font-medium text-muted">{assessment.taskType}</p>
 
-                <div className="mt-8">
-                  <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Summary</p>
-                  <ul className="grid gap-2 sm:grid-cols-3 sm:gap-4">
-                    {assessment.summary.map((item) => (
-                      <li key={item} className="border-l-2 border-accent pl-3 text-sm leading-6 text-ink">
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="mt-8">
+                    <p className="mb-3 text-[clamp(0.72rem,0.62rem+0.15vw,0.86rem)] font-bold uppercase tracking-[0.2em] text-muted">
+                      Summary
+                    </p>
+                    <ul className="grid gap-2 sm:grid-cols-3 sm:gap-4">
+                      {assessment.summary.map((item) => (
+                        <li
+                          key={item}
+                          className="border-l-2 border-accent pl-3 text-[clamp(1rem,0.84rem+0.35vw,1.25rem)] leading-[1.6] text-ink"
+                        >
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="w-full shrink-0 pt-4 text-[clamp(1rem,0.84rem+0.35vw,1.25rem)] xl:mt-1 xl:w-52 xl:pl-6 xl:pt-0">
+                  <p className="text-[clamp(0.72rem,0.62rem+0.15vw,0.86rem)] font-bold uppercase tracking-[0.2em] text-muted">Session</p>
+                  <p className="mt-2 font-semibold text-ink">
+                    {!assessmentStarted ? "Ready to begin" : mainAnswerStarted ? "Main answer running" : "Summary phase"}
+                  </p>
+                  <p className="mt-2 leading-[1.6] text-slate-500">
+                    {!assessmentStarted
+                      ? "Start the global timer when you receive the go-ahead."
+                      : mainAnswerStarted
+                        ? `Main answer started with ${formatDuration(mainAnswerDuration ?? 0)} remaining.`
+                        : "Use the summary phase to form your approach, then start the main answer timeline."}
+                  </p>
                 </div>
               </div>
+            </section>
 
-              <div className="w-full shrink-0 border-t border-line pt-4 text-sm xl:mt-1 xl:w-52 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Session</p>
-                <p className="mt-2 font-semibold text-ink">
-                  {!assessmentStarted ? "Ready to begin" : mainAnswerStarted ? "Main answer running" : "Summary phase"}
-                </p>
-                <p className="mt-2 leading-6 text-slate-500">
-                  {!assessmentStarted
-                    ? "Start the global timer when you receive the go-ahead."
-                    : mainAnswerStarted
-                      ? `Main answer started with ${formatDuration(mainAnswerDuration ?? 0)} remaining.`
-                      : "Use the summary phase to form your approach, then start the main answer timeline."}
-                </p>
-              </div>
+            <div>
+              {assessment.sections.map((section) => {
+                return (
+                  <Section
+                    key={section.id}
+                    section={section}
+                    registerSection={registerSection}
+                  />
+                );
+              })}
             </div>
-          </section>
-
-          <div className="max-w-5xl">
-            {assessment.sections.map((section) => {
-              const timing = sectionTimings.get(section.id);
-              return (
-                <Section
-                  key={section.id}
-                  section={section}
-                  sectionRemaining={timing?.remaining ?? null}
-                  sectionOver={timing?.over ?? false}
-                  registerSection={registerSection}
-                />
-              );
-            })}
           </div>
         </main>
       </div>
