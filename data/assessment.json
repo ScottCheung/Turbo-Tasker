@@ -1,0 +1,111 @@
+{
+  "title": "Backend Trading System",
+  "taskType": "Backend Design",
+  "summary": [
+    "Receive trading requests through a simple API.",
+    "Persist reliable state as the source of truth.",
+    "Process background work asynchronously and safely."
+  ],
+  "sections": [
+    {
+      "id": "approach",
+      "title": "High-Level Approach",
+      "timePercent": 15,
+      "points": [
+        "Keep synchronous work minimal.",
+        "Persist state before background processing.",
+        "Process asynchronous work with reliable workers."
+      ],
+      "speakingNotes": [
+        "I would keep the API simple and make the write durable.",
+        "The database stores the important state before work continues."
+      ],
+      "diagram": ""
+    },
+    {
+      "id": "architecture",
+      "title": "Architecture",
+      "timePercent": 25,
+      "points": [
+        "The API validates incoming requests.",
+        "PostgreSQL stores the durable system state.",
+        "Kafka carries events for asynchronous processing.",
+        "Workers process jobs independently and can scale horizontally."
+      ],
+      "speakingNotes": [
+        "The request first reaches the API for validation.",
+        "Then I persist the important state in PostgreSQL.",
+        "Kafka separates the request path from background processing."
+      ],
+      "diagram": "flowchart LR\n  Client --> API\n  API --> DB[(PostgreSQL)]\n  API --> Kafka\n  Kafka --> Worker"
+    },
+    {
+      "id": "data-flow",
+      "title": "Data Flow",
+      "timePercent": 20,
+      "points": [
+        "Validate the request and authenticate the caller.",
+        "Persist the request and its initial state.",
+        "Publish an event after the state is durable.",
+        "Let a worker process the event and update status."
+      ],
+      "speakingNotes": [
+        "I will walk through one request from the client inward.",
+        "First I validate the input and persist the initial state.",
+        "The worker can retry without losing the original request."
+      ],
+      "diagram": ""
+    },
+    {
+      "id": "decisions",
+      "title": "Key Decisions",
+      "timePercent": 15,
+      "points": [
+        "PostgreSQL is the source of truth.",
+        "Workers must be idempotent.",
+        "Events need retries and dead-letter handling.",
+        "The API stays stateless for straightforward scaling."
+      ],
+      "speakingNotes": [
+        "The key decision is to optimise for durable state.",
+        "Idempotency makes retries safe when a worker fails.",
+        "A dead-letter path prevents one bad event blocking the queue."
+      ],
+      "diagram": ""
+    },
+    {
+      "id": "risks",
+      "title": "Risks",
+      "timePercent": 15,
+      "points": [
+        "Duplicate events can trigger repeated work.",
+        "Worker failures can leave requests in progress.",
+        "Database failures can affect both reads and writes.",
+        "Operational visibility is needed for stuck jobs."
+      ],
+      "speakingNotes": [
+        "Failures are expected in production, so retries must be safe.",
+        "I would monitor queue depth, latency, and failed attempts.",
+        "The system should expose enough state to investigate incidents."
+      ],
+      "diagram": ""
+    },
+    {
+      "id": "conclusion",
+      "title": "Conclusion",
+      "timePercent": 10,
+      "points": [
+        "Use a simple synchronous API at the edge.",
+        "Keep durable state in a reliable database.",
+        "Move slow work to retryable asynchronous workers.",
+        "Scale each part independently as demand grows."
+      ],
+      "speakingNotes": [
+        "Overall I would optimise for reliability and clear ownership.",
+        "The design can start small and scale each component gradually.",
+        "That keeps the first version easy to operate and explain."
+      ],
+      "diagram": ""
+    }
+  ]
+}
