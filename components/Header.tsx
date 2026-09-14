@@ -25,9 +25,7 @@ export default function Header({
         <div className="min-w-0">
           <p className="mt-1 truncate text-[clamp(0.98rem,0.84rem+0.35vw,1.2rem)] font-semibold text-ink">{title}</p>
           <p className="text-[clamp(0.68rem,0.58rem+0.15vw,0.82rem)] font-bold uppercase tracking-[0.16em] text-muted">{taskType}</p>
-          
         </div>
-
 
         <div className="flex items-end justify-between gap-4 md:justify-end">
           <div className="text-left md:text-right">

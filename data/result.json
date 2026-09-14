@@ -2,40 +2,28 @@
   "title": "Flash-Sale E-commerce Backend: Safe Stock, Fast Orders",
   "taskType": "Backend Design",
   "summary": [
-    "先拆清 Flash Sale 的高并发、库存和支付风险，再形成整体方案。",
-    "用 PostgreSQL transaction + stock buckets 防止 oversell，用 Kafka 处理慢任务。",
-    "用 idempotency、guarded state transition 和 reconciliation 保证 retry 与 crash recovery 安全。"
+    "EN: Build an order and payment system for a high-traffic flash sale. | 中文: 构建一个支持浏览、购物车、下单和支付的高并发秒杀电商后端。",
+    "EN: Never oversell stock or charge the same order twice. | 中文: 最难的约束是库存不能卖超，而且同一订单不能重复扣款。",
+    "EN: Return orders quickly and recover every important state after failures. | 中文: 成功标准是快速返回订单，安全处理支付未知状态，并在失败后恢复订单、库存和支付记录。"
   ],
   "sections": [
     {
       "id": "understanding",
       "title": "Understanding",
       "points": [
-        "背景：Flash Sale 电商；用户 browse 商品、加入 cart、再 place order。",
-        "流量：最多 100,000 个并发用户；同一个 SKU 会形成 hot spot。",
-        "核心目标：快速返回 order response，同时保证库存绝不 oversell。",
-        "Functional：创建 order、处理 payment、查询 order/payment status、支持安全 retry。",
-        "库存约束：下单时做 stock reservation；payment failed 或 10 分钟未支付就 release。",
-        "支付约束：Payment Provider 可能 slow、unavailable 或 timeout；同一 order 不能重复 charge。",
-        "可靠性要求：order service crash 后要恢复 payment state；order history 必须可 audit。",
-        "关键难点：高并发库存一致性，以及 Provider timeout 带来的 unknown payment state。",
-        "假设与保证：PostgreSQL 保存核心状态；Provider 支持 status query 和 idempotency key。"
+        "This is a flash-sale platform for browsing products, managing carts, and placing orders.",
+        "Up to 100,000 users may buy limited stock at the same time.",
+        "The API must respond quickly, while payment may be slow, unavailable, or unknown.",
+        "Orders need status queries, safe retries, ten-minute expiry, stock release, and audit history.",
+        "Main risks are concurrent stock updates and payment recovery; assume durable database and provider status lookup."
       ],
       "speakingNotes": [
-        "我先拆一下题目。",
-        "这是一个 Flash Sale 电商。",
-        "用户 browse 商品、加入 cart、提交 order。",
-        "高峰可能有 100,000 个并发用户。",
-        "同一个 SKU 会形成 hot spot。",
-        "最重要的是库存不能 oversell。",
-        "用户还要快速收到 order response。",
-        "它可能 slow、unavailable 或 timeout。",
-        "timeout 不代表 payment 一定失败。",
-        "retry 不能重复 order 或 charge。",
-        "未支付订单十分钟后要 release stock。",
-        "用户可以查询 order 和 payment status。",
-        "crash 后要恢复 state，history 要可 audit。",
-        "我假设 PostgreSQL 保存核心状态，Provider 支持 status query。"
+        "中文理解：我先把题目拆成业务流程和风险。 | SAY: I will first break down the flow and risks.",
+        "中文理解：这是一个 Flash Sale 平台，用户先浏览商品，再加入 cart，最后提交 order。 | SAY: Users browse products, add carts, and place orders.",
+        "中文理解：高峰有 100,000 个用户抢有限库存，所以同一个 SKU 会产生强并发。 | SAY: Many users may buy the same SKU together.",
+        "中文理解：系统要快速返回订单，还要支持查询、十分钟过期、失败释放库存和 audit history。 | SAY: The order must be fast and auditable.",
+        "中文理解：Payment Provider 可能 timeout，timeout 不代表扣款一定失败，所以不能盲目重试。 | SAY: A payment timeout does not mean payment failed.",
+        "中文理解：最难的是并发库存和未知支付状态。我假设 durable database 保存核心状态，Provider 支持 status lookup。 | SAY: I assume the database and provider support recovery."
       ],
       "visual": ""
     },
@@ -43,21 +31,19 @@
       "id": "approach",
       "title": "Approach",
       "points": [
-        "先把 sync path 做短：validation、idempotency 和 stock reservation 完成后立即返回。",
-        "把 external payment 放到 async Worker；订单先进入 PENDING_PAYMENT，不阻塞 API。",
-        "PostgreSQL 保存 order、payment、reservation 和 audit event，作为 source of truth。",
-        "Kafka 配合 transactional outbox 传递可靠任务；Admission Control 和 backpressure 吸收 traffic spike。",
-        "所有 retry 都带 idempotency；用 guarded state transition 和 reconciliation 处理未知结果。"
+        "Keep the synchronous path short: validate, reserve stock, and return a pending order.",
+        "Use PostgreSQL as the durable source of truth for orders, stock, and payment state.",
+        "Move payment, expiry, and recovery work to asynchronous workers.",
+        "Use Kafka and a transactional outbox to deliver durable background tasks.",
+        "Use idempotency, valid state changes, and backpressure for safe retries and traffic spikes."
       ],
       "speakingNotes": [
-        "现在开始推导整体方案。",
-        "我先区分 sync 和 async。",
-        "API path 只做快速检查。",
-        "核心状态先写 PostgreSQL。",
-        "慢的 payment 放到 Worker。",
-        "Kafka 可靠传递异步任务。",
-        "Admission Control 配合 backpressure。",
-        "retry 必须带 idempotency。"
+        "中文理解：现在从 requirements 推导整体方案。我先把快速请求和慢任务分开。 | SAY: I will separate fast requests from slow work.",
+        "中文理解：API 只做校验、幂等检查和 stock reservation，然后马上返回 PENDING_PAYMENT。 | SAY: The API reserves stock and returns a pending order.",
+        "中文理解：订单、库存和 payment state 要放在 durable database 中，PostgreSQL 是 source of truth。 | SAY: PostgreSQL is the source of truth.",
+        "中文理解：支付和过期处理不阻塞 API，它们放到 Kafka 后面的 Worker。 | SAY: Workers handle payment and expiry asynchronously.",
+        "中文理解：Transactional outbox 把业务状态和待发送 event 一起保存，避免订单成功但消息丢失。 | SAY: I save the order and event together.",
+        "中文理解：Kafka 吸收 traffic spike，backpressure 限制系统继续接收；idempotency 让重复 retry 不产生新结果。 | SAY: Backpressure protects the system during traffic spikes."
       ],
       "visual": ""
     },
@@ -65,57 +51,44 @@
       "id": "core-solution",
       "title": "Core Solution",
       "points": [
-        "Order API 用 userId + clientRequestId 做 idempotency；unique constraint 让重复请求返回同一个 order。",
-        "Checkout transaction 用 FOR UPDATE SKIP LOCKED 找到 stock bucket，条件扣减并写入 stock reservation，保证不 oversell。",
-        "同一 transaction 写入 PENDING_PAYMENT order、expiresAt、reservation、audit event 和 transactional outbox，然后快速返回 orderId。",
-        "Outbox Publisher 把任务送入 Kafka；Payment Worker 使用固定 provider idempotency key 调用 Payment Provider。",
-        "Provider success / failed 用 guarded state transition 更新 order；成功消费 reservation，失败释放 reservation。",
-        "Provider timeout 先做 status query；Reconciliation Worker 处理 unknown result 和 crash recovery，Status API 读取 durable state。",
-        "Expiry Worker 找到超过 10 分钟的 PENDING_PAYMENT order，在 transaction 中改为 EXPIRED 并释放 reservation。"
+        "Use a client request ID and a unique constraint to return one order for duplicate requests.",
+        "Lock an available stock bucket with FOR UPDATE SKIP LOCKED and decrement only when stock remains.",
+        "Save the order, reservation, expiry time, audit event, and outbox event in one transaction.",
+        "Return order ID as PENDING_PAYMENT; a worker calls the provider with one stable idempotency key.",
+        "Use guarded state changes: successful payment consumes stock, while failure or expiry releases the reservation.",
+        "After timeout or crash, query provider status, reconcile unknown results, and serve durable status."
       ],
       "speakingNotes": [
-        "先讲一笔 order 的 data flow。",
-        "API 做 validation 和 idempotency。",
-        "重复请求返回已有 order。",
-        "Transaction 用 SKIP LOCKED 找 bucket。",
-        "条件扣减保证不 oversell。",
-        "同时写 order、reservation、outbox、audit event。",
-        "API 返回 PENDING_PAYMENT，不等 Provider。",
-        "Kafka 把任务交给 Payment Worker。",
-        "Worker 使用固定 idempotency key。",
-        "success 或 failed 用 guarded transition，failed release reservation。",
-        "timeout 先 query status，unknown 不 blind retry。",
-        "Reconciliation 处理 unknown 和 crash recovery。",
-        "Expiry Worker release 过期库存。",
-        "Status API 读取 durable state。"
+        "中文理解：这一页按一笔 order 的实际 data flow 来讲。 | SAY: I will now follow one order through the system.",
+        "中文理解：API 收到 client request ID；如果用户重复提交，unique constraint 会返回原来的 order。 | SAY: A unique request ID prevents duplicate orders.",
+        "中文理解：库存被分成多个 stock bucket。Transaction 用 FOR UPDATE SKIP LOCKED 锁一个还有库存的 bucket，减少 hot SKU 冲突。 | SAY: We lock one available stock bucket.",
+        "中文理解：同一个 transaction 条件扣减库存，并写入 reservation、order、expiresAt、audit event 和 outbox event，避免只成功一部分。 | SAY: I save stock and order state together.",
+        "中文理解：写入成功后，API 立刻返回 orderId 和 PENDING_PAYMENT。用户不用等待外部 Provider。 | SAY: The API returns a pending order quickly.",
+        "中文理解：Payment Worker 使用固定 idempotency key。这个 key 让同一笔支付的 retry 不会再次扣款。 | SAY: The same key makes payment retries safe.",
+        "中文理解：Provider timeout 后先做 status query。服务 crash 后，Reconciliation Worker 继续处理 unknown state。 | SAY: We check the provider before retrying.",
+        "中文理解：Guarded state change 只允许合法状态转换。Status API 读取 durable state，让用户看到最新状态。 | SAY: The status API reads durable state."
       ],
-      "visual": "flowchart LR\n  User[User] --> Gateway[API Gateway]\n  Gateway --> Edge[Rate Limit + Admission Control]\n  Gateway --> Read[Catalog and Status API]\n  Read --> Cache[(Redis Cache)]\n  Read --> DB[(PostgreSQL)]\n  Edge --> Checkout[Stateless Checkout Service]\n  Checkout --> DB\n  Checkout --> Stock[Stock Service]\n  Stock --> Buckets[(Stock Buckets)]\n  Checkout --> Outbox[Transactional Outbox]\n  Outbox --> Kafka[Kafka Queue]\n  Kafka --> Payment[Payment Worker]\n  Payment --> Provider[Payment Provider]\n  Payment -. timeout .-> Recon[Reconciliation Worker]\n  Recon --> Provider\n  Recon --> DB\n  Kafka --> Expiry[Expiry Worker]\n  Expiry --> DB\n  Expiry --> Buckets"
+      "visual": "flowchart LR\n  User[User] --> Gateway[API Gateway]\n  Gateway --> Edge[Rate Limit + Admission Control]\n  Gateway --> Read[Catalog and Status API]\n  Read --> Cache[(Redis Cache)]\n  Read --> DB[(PostgreSQL)]\n  Edge --> API[Stateless Order API]\n  API --> DB\n  API --> Stock[Stock Service]\n  Stock --> Buckets[(Stock Buckets)]\n  API --> Outbox[Transactional Outbox]\n  Outbox --> Kafka[Kafka Queue]\n  Kafka --> Payment[Payment Worker]\n  Payment --> Provider[Payment Provider]\n  Payment -. timeout .-> Recon[Reconciliation Worker]\n  Recon --> Provider\n  Recon --> DB\n  Kafka --> Expiry[Expiry Worker]\n  Expiry --> DB\n  Expiry --> Buckets"
     },
     {
       "id": "verification",
       "title": "Verification",
       "points": [
-        "Duplicate request / Kafka redelivery：靠 clientRequestId、unique constraint 和 consumer idempotency 防止重复 order 或 charge。",
-        "Provider timeout：先 status query；仍然 UNKNOWN 时暂停 blind retry，交给 reconciliation 或 DLQ。",
-        "Crash after charge：用相同 idempotency key 查 Provider，并用 guarded transition 补写本地 PAID state。",
-        "Payment 与 expiry race：用 transaction 和状态条件只允许一个转换；late success 进入 refund / manual review。",
-        "同一 SKU 并发抢购：压测 stock invariant；检查 available + reserved + sold 不超过 total stock。",
-        "Traffic spike 或 DB overload：用 admission control、backpressure、worker autoscaling 和 query/connection 监控保护系统。",
-        "主要 trade-off：payment status 是 eventual consistency；换来更短 API latency 和更强 recovery。"
+        "Duplicate requests and Kafka redelivery must not create a second order or payment.",
+        "A payment timeout stays unknown until reconciliation; never send a blind new charge.",
+        "If the worker crashes after charging, provider lookup repairs the local payment state.",
+        "Payment and expiry races allow one state change; late success goes to refund review.",
+        "Admission control and backpressure protect the database when traffic or queue lag rises.",
+        "Load tests verify stock invariants; the trade-off is eventual payment status and more recovery work."
       ],
       "speakingNotes": [
-        "现在检查 failure cases。",
-        "先看 duplicate request。",
-        "unique key 返回已有 order。",
-        "Kafka redelivery 也不能重复 charge。",
-        "Provider timeout 先 reconciliation，不做 blind retry。",
-        "Worker crash 后继续 query Provider。",
-        "支付和 expire 可能同时发生。",
-        "guarded transition 只允许一个结果。",
-        "late success 进入 refund。",
-        "流量过高时触发 backpressure。",
-        "压测同一 SKU 的并发抢购。",
-        "监控 lag、stock drift、UNKNOWN age。"
+        "中文理解：现在主动检查这个设计在 production 里怎么失败。 | SAY: I will test the design against production failures.",
+        "中文理解：重复请求和 Kafka redelivery 都可能重复执行，所以要用 unique key 和 idempotency 防重。 | SAY: Idempotency prevents duplicate orders and payments.",
+        "中文理解：Provider timeout 后结果不确定。先做 reconciliation，确认状态前不能发送新的 charge。 | SAY: We check the provider before a new charge.",
+        "中文理解：Worker 可能在扣款后 crash。Reconciliation 查询 Provider，再安全补写本地 payment state。 | SAY: Recovery repairs the local payment state.",
+        "中文理解：payment 和 expire 可能同时发生。guarded transition 只允许一个结果，late success 进入 refund review。 | SAY: One valid state change wins the race.",
+        "中文理解：流量或 queue lag 太高时，Admission Control 和 backpressure 会减慢新请求，保护数据库。 | SAY: Backpressure protects the database under load.",
+        "中文理解：压测要抢同一个 SKU，并检查 available、reserved、sold 的总量不超过库存。主要代价是 payment eventual consistency。 | SAY: Tests verify stock safety and eventual payment status."
       ],
       "visual": ""
     },
@@ -123,17 +96,15 @@
       "id": "wrap-up",
       "title": "Wrap-up",
       "points": [
-        "推荐 PostgreSQL transaction + stock buckets + Kafka outbox + idempotent payment 的组合。",
-        "它先保证 durable order 和安全库存，再用 async processing 快速响应用户。",
-        "主要 trade-off 是 payment eventual consistency 和更高的 reconciliation 复杂度；规模增长时可水平扩展 API、Worker 和 read path。"
+        "Recommend PostgreSQL transactions, stock buckets, Kafka outbox, and idempotent provider calls.",
+        "This protects stock and duplicate charges while keeping the order API fast and recoverable.",
+        "The trade-off is eventual payment status and more operational work for reconciliation and monitoring."
       ],
       "speakingNotes": [
-        "最后总结一下。",
-        "先同步保存核心状态。",
-        "慢 payment 走 async processing。",
-        "idempotency 让 retry 安全。",
-        "payment status 可能最终一致。",
-        "规模增加时水平扩展 API 和 Worker。"
+        "中文理解：最后总结推荐方案，不再引入新的大型组件。 | SAY: I will summarize the recommended design.",
+        "中文理解：PostgreSQL transaction 保护库存和订单，Kafka 与 Worker 处理慢的 payment。 | SAY: Transactions protect stock, and workers handle payment.",
+        "中文理解：idempotency 和 reconciliation 让 retry、timeout 和 crash 更安全。 | SAY: Idempotency and reconciliation make recovery safer.",
+        "中文理解：主要代价是 payment status 可能最终一致，系统也需要更多监控和运维。 | SAY: The main trade-off is eventual payment status."
       ],
       "visual": ""
     }
