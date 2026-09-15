@@ -18,11 +18,11 @@
         "Handle retries and concurrent requests safely."
       ],
       "speakingNotes": [
-        "这一题是在实现一个很小的跟单交易后端逻辑。交易员有一笔源交易后，系统会尝试为某个 follower 创建对应交易。 ｜ This function copies one trade for one follower.",
-        "follower 不是总能跟单。必须先确认 copyingEnabled 为真，并且余额和剩余额度都足够支付这笔交易。 ｜ The follower must be eligible and have enough money.",
-        "成功时有三个业务结果：扣余额、扣 allocation、保存一条 copy trade 记录。这三件事必须保持一致。 ｜ A successful copy changes balance, allocation, and records.",
-        "题目特别强调重试和并发，所以不能只写普通的 if 判断再扣钱。重复请求和同时请求都可能产生错误的金融结果。 ｜ Retries and concurrent calls are the main risks.",
-        "我假设 trade amount 必须是正数，并且每个 follower 的状态由这个函数管理。接下来我会说明如何保证这些更新安全。 ｜ Next, I will show the safe update flow."
+        "这一题是在实现一个小型跟单交易后端。当交易员开仓时，系统收到一笔 source trade，然后尝试为一个 follower 创建金额相同的跟单交易。我的实现只处理一个 trade 和一个 follower，但把真实系统里最重要的一致性问题保留下来。 ｜ This function receives one source trade and tries to copy it for one follower. I will focus on the state changes that must stay safe.",
+        "follower 不是总能跟单。只有 copyingEnabled 为真，并且 balance 和 remainingAllocation 都不少于 trade amount 时，才允许创建跟单。这里两个额度都要检查，因为它们代表不同的业务限制。 ｜ A follower is eligible only when copying is enabled and both the balance and the remaining allocation can cover the trade.",
+        "成功时必须同时完成三个结果：从 balance 扣掉金额，从 remainingAllocation 扣掉金额，并保存一条 copy trade 记录。不能只做其中两步，否则账户状态和交易记录会互相矛盾。 ｜ A successful copy has three results: reduce the balance, reduce the allocation, and record the copied trade. These results must agree.",
+        "题目特别强调同一请求可能重试，也可能有两个不同请求同时到达。普通的先检查再扣钱，在这两种情况下都可能重复扣款或超出额度，所以安全性是这道题的核心。 ｜ The main risks are retries and concurrent requests. A simple check followed by an update can charge twice or overspend.",
+        "我把 trade amount 限制为有限的正数，并假设这个服务负责维护 follower 的状态和跟单记录。先用一个可运行的内存 demo 证明行为，再说明多 worker 生产环境需要怎样升级。 ｜ I require a finite positive amount. I will first prove the behavior with a runnable in-memory demo, then explain the production version."
       ],
       "visual": ""
     },
@@ -37,11 +37,11 @@
         "Return copied, duplicate, or rejected results."
       ],
       "speakingNotes": [
-        "为了在 15 分钟内清楚展示重点，我使用 in-memory Map 保存 follower 和已记录交易。这个选择适合 demo，不是假装它已经是生产数据库。 ｜ I use in-memory storage for a small demo.",
-        "我把 trade ID 和 follower ID 拼成 idempotency key。例如 trade-100:follower-1 只允许产生一次金融效果。 ｜ The key identifies one copy operation.",
-        "idempotency 的意思是同一个操作重复执行，最终业务结果仍然和执行一次相同。网络重试时尤其重要，否则会重复扣钱。 ｜ A retry must not charge the follower twice.",
-        "我为每个 follower 使用一个 mutex lock。mutex 就是互斥锁，同一时刻只允许一个请求修改这个 follower 的余额和额度。 ｜ One follower lock allows one update at a time.",
-        "锁只覆盖同一个 follower，所以不同 follower 仍可以并行处理。函数会明确返回 copied、duplicate 或 rejected，方便调用方处理。 ｜ Different followers can still run in parallel."
+        "为了让 demo 可以直接运行，我使用三个 in-memory Map：一个保存 follower 状态，一个保存已经成功的 copy trades，一个保存每个 follower 的等待锁。这不是生产数据库，而是把核心业务流程集中在一个容易检查的例子里。 ｜ I use in-memory maps for this demo: one for followers, one for recorded trades, and one for locks. This keeps the behavior easy to run and inspect.",
+        "我把 trade ID 和 follower ID 拼成 idempotency key，例如 trade-100:follower-1。因为同一笔 trade 给不同 follower 是两个不同操作，所以 key 必须同时包含这两个 ID。 ｜ I build an idempotency key from the trade ID and follower ID. The same source trade can be copied for many followers, so both IDs matter.",
+        "idempotency 的意思是同一个业务操作执行多次，最终金融效果仍然和执行一次相同。第一次请求成功后，后续重试应该返回已有结果，而不是再次扣余额或再写一条记录。 ｜ Idempotency means that repeating the same operation has the same final effect as running it once. A retry should return the existing result without charging again.",
+        "我为每个 follower 使用一个简单的 promise-based mutex。新的请求会排在这个 follower 的前一个请求后面，只有前一个请求释放锁后才能读取和修改状态。 ｜ I use a promise-based lock per follower. A new request waits for the previous request to finish before it reads or changes that follower.",
+        "锁是按 follower 分开的，因此 follower-1 被处理时不会阻塞 follower-2。函数还返回 copied、duplicate 或 rejected 三种明确状态，让调用方知道发生了成功、重复还是业务拒绝。 ｜ The lock is per follower, so different followers can still run in parallel. The result clearly says copied, duplicate, or rejected."
       ],
       "visual": ""
     },
@@ -57,14 +57,15 @@
         "Return a cloned result so callers cannot mutate state."
       ],
       "speakingNotes": [
-        "处理开始时先拿到该 follower 的锁。两个不同交易同时到达时，其中一个会等待，不能同时读取同一个旧余额。 ｜ First, I lock this follower.",
-        "进入锁以后先检查 idempotency key 是否已存在。如果已存在，直接返回 duplicate，不再扣任何钱，也不新建记录。 ｜ I return duplicate before changing any money.",
-        "如果不是重复请求，再验证 amount 为正数、跟单已开启、余额足够、allocation 也足够。任何一个条件不满足都返回 rejected。 ｜ Then I validate all business rules.",
-        "所有检查和扣减都在同一个 critical section。critical section 是一段不能被另一个同类请求插队的代码，这样检查通过的余额就是实际扣减的余额。 ｜ Checks and updates happen in one critical section.",
-        "成功后我同时减少 balance 和 remainingAllocation，然后用同一个 key 保存 copy trade。记录在释放锁之前写入，所以之后的重试一定能看到它。 ｜ I save the record before unlocking.",
-        "最后返回 state 的 clone，而不是内部对象本身。这样外部调用者不能意外修改内存中的 follower 状态。 ｜ Callers receive a copy of the state.",
-        "这个顺序保证同一个 key 只有一次扣减，也保证两个 700 的并发请求不会都从 1000 中成功扣款。 ｜ This order prevents duplicates and overspending.",
-        "下面的图展示一次请求从锁、校验到保存记录的完整路径。 ｜ This diagram shows the full processing path."
+        "处理开始时先进入该 follower 的锁。重点是锁必须包住读取状态的动作，而不只是包住最后的扣款；否则两个请求仍然可能同时读到同一个旧余额。 ｜ First, I acquire the lock for this follower. The lock must cover the state read as well as the update, or two requests could see the same old balance.",
+        "拿到锁以后，我先用 trade ID 和 follower ID 查记录。如果记录已经存在，就立即返回 duplicate，并返回之前的 follower 状态和 copy trade。这个分支不会碰余额、额度或记录。 ｜ Inside the lock, I check the idempotency key first. If a record exists, I return duplicate with the saved result and make no financial change.",
+        "如果不是重复请求，再验证四类条件：金额必须是有限的正数，follower 必须开启跟单，balance 要够，remainingAllocation 也要够。任何条件失败都会返回 rejected，并保留原来的状态。 ｜ For a new request, I validate four things: a finite positive amount, copying enabled, enough balance, and enough allocation. A failure returns rejected without changing state.",
+        "这些检查和更新都发生在同一个 critical section。也就是说，请求从读取 balance 开始，到写入记录结束，中间不能被另一个同 follower 请求插队；因此检查通过的余额就是实际扣减时的余额。 ｜ The checks and updates are one critical section. No other request for this follower can interrupt the flow between reading the balance and saving the result.",
+        "验证通过后，我分别从 balance 和 remainingAllocation 减去 trade amount，然后创建一条带有 sourceTradeId、traderId、followerId 和 amount 的记录。这样以后不仅知道扣了多少钱，也知道这笔跟单来自哪一笔源交易。 ｜ After validation, I reduce both limits and create a record with the source trade, trader, follower, and amount. The record explains exactly what was copied.",
+        "记录使用同一个 idempotency key 保存，并且在释放锁之前完成。如果同一 trade 紧接着重试，它一定能看到这条记录并走 duplicate 分支，而不是再次产生金融效果。 ｜ I save the record under the same idempotency key before releasing the lock. An immediate retry will therefore see it and become a duplicate.",
+        "返回结果时我使用 clone，而不是把内部 Map 里的对象直接暴露出去。这样调用方即使修改返回值，也不会偷偷改变服务内部保存的 balance 或记录。 ｜ I return cloned objects instead of internal references. A caller can inspect the result without being able to mutate the service state by accident.",
+        "所以关键顺序是：先排队拿锁，再查重复，再做资格校验，接着扣两个额度并保存记录，最后释放锁。这个顺序同时解决重复扣款和并发超支两个问题。 ｜ The order is lock, duplicate check, validation, two deductions, record, and unlock. This protects against both duplicate charges and concurrent overspending.",
+        "这张图把一次请求的主路径画出来。重复请求在记录检查处结束，不合格请求在校验处结束，只有通过校验的请求才会修改状态并返回 copied。 ｜ The diagram shows the three paths: duplicate stops at the record check, rejected stops at validation, and only a valid request changes state and returns copied."
       ],
       "visual": "flowchart TD\n  A[Copy trade request] --> B[Lock follower]\n  B --> C{Record already exists?}\n  C -- Yes --> D[Return duplicate]\n  C -- No --> E{Eligible and enough funds?}\n  E -- No --> F[Return rejected]\n  E -- Yes --> G[Deduct balance]\n  G --> H[Deduct allocation]\n  H --> I[Save copy trade record]\n  I --> J[Release lock and return copied]"
     },
@@ -80,12 +81,12 @@
         "Use database transactions for multiple production workers."
       ],
       "speakingNotes": [
-        "正常场景从 balance 10,000 和 allocation 2,000 开始，跟单 700 后应该分别变成 9,300 和 1,300，并且只有一条记录。 ｜ The normal case should deduct 700 once.",
-        "重复场景把同一个 trade 发给同一个 follower 两次。第一次 copied，第二次 duplicate；最终余额、额度和记录数量必须与第一次后完全相同。 ｜ The second request creates no financial effect.",
-        "并发场景从 1,000 和 1,000 开始，同时处理两笔不同的 700。拿到锁的第一笔成功后只剩 300，第二笔必须失败。 ｜ Only one concurrent trade can succeed.",
-        "我用 Promise.all 真正同时发起两个调用，并在 demo 末尾断言最终 balance 是 300，记录数量是一条。这验证的是代码行为，不只是口头推理。 ｜ I run both calls and assert the final state.",
-        "还应测试 copying disabled、零或负金额、余额不足、额度不足。这些边界情况都不能改变 follower 状态或留下错误记录。 ｜ Invalid requests must not change state.",
-        "这个内存锁只保护一个 Node.js process。生产环境有多个 worker 时，锁必须移到共享数据库中。 ｜ Production needs database-level protection."
+        "第一个是正常场景：初始 balance 是 10,000，remainingAllocation 是 2,000，trade amount 是 700。请求应返回 copied，最终 balance 是 9,300，allocation 是 1,300，并且只保存一条金额为 700 的记录。 ｜ In the normal case, 10,000 and 2,000 become 9,300 and 1,300 after one 700 trade. The result is copied and there is one recorded trade.",
+        "第二个是同一笔 trade 重复发送。第一次请求会通过校验并返回 copied；第二次使用相同 key，会返回 duplicate。最终 balance 仍是 9,300，allocation 仍是 1,300，记录数量仍是一条。 ｜ In the retry case, the first call returns copied and the second returns duplicate. The final balance, allocation, and record count are exactly the same as after the first call.",
+        "第三个是并发场景：follower 只有 1,000 balance 和 1,000 allocation，同时收到两笔不同的 700。第一笔拿到锁并成功后只剩 300，第二笔重新读取状态时就会被拒绝。 ｜ In the concurrent case, two different 700 trades compete for 1,000. One succeeds, the balance becomes 300, and the second request is rejected after it reads the updated state.",
+        "代码使用 Promise.all 同时发起两个调用，而不是先后手动调用。demo 还会断言最终 balance 必须是 300，记录数量必须是一条；如果断言失败，程序会直接报错。 ｜ I use Promise.all to start both calls together. The demo asserts a final balance of 300 and exactly one record, so this is a behavioral check rather than only an explanation.",
+        "除了题目要求的三个场景，我还会检查 copying disabled、零金额、负金额、余额不足和 allocation 不足。每个拒绝场景都应该返回 rejected，不扣任何金额，也不留下 copy trade 记录。 ｜ I would also test disabled copying, zero or negative amounts, low balance, and low allocation. Every rejected request must leave both the amounts and the records unchanged.",
+        "这里的锁只保护一个 Node.js process，而且进程重启后内存数据会消失。所以 demo 证明的是单进程逻辑；如果部署多个 worker，就必须让数据库承担真正的原子性和唯一性保护。 ｜ This lock only protects one Node.js process, and memory disappears on restart. The demo proves the single-process logic; multiple workers need database protection."
       ],
       "visual": ""
     },
@@ -98,10 +99,10 @@
         "PostgreSQL should own atomic updates in production."
       ],
       "speakingNotes": [
-        "我构建的是一个小而完整的实现：它先检查资格，再安全地扣余额和额度，并且记录成功的跟单交易。 ｜ I built a small and complete copy flow.",
-        "幂等 key 解决重复请求，per-follower lock 解决单进程内的并发竞争。这两个机制一起保护资金状态的一致性。 ｜ Idempotency and locking protect the money state.",
-        "生产环境我会使用 PostgreSQL transaction，把检查、更新和插入记录放在同一个 transaction 内。transaction 的意思是这些操作要么全部成功，要么全部回滚。 ｜ A database transaction makes the update atomic.",
-        "我还会对 source trade ID 和 follower ID 建 UNIQUE constraint，并用 row-level lock 锁住 follower 行。这样多个 worker 也能阻止重复写入和并发超扣。 ｜ A unique constraint and row lock work across workers."
+        "总结一下，我构建了一个完整但有边界的 copy flow：它先判断 follower 是否 eligible，再在安全的顺序里扣掉 balance 和 allocation，最后记录成功的跟单交易，并把结果返回给调用方。 ｜ I built a small but complete copy flow. It checks eligibility, updates both limits safely, records the copy, and returns a clear result.",
+        "幂等 key 解决同一笔 trade 的重复请求，per-follower lock 解决单进程内多个请求竞争同一个 follower。它们分别保护“只处理一次”和“不能同时超支”这两个不变量。 ｜ The idempotency key protects the once-only rule, and the per-follower lock protects the no-overspending rule for concurrent requests.",
+        "如果接入 PostgreSQL，我会把检查、余额更新、allocation 更新和插入记录放在同一个 transaction 里。transaction 要么全部提交，要么全部回滚，因此不会出现扣了余额却没有交易记录的半完成状态。 ｜ With PostgreSQL, I would put the checks, both updates, and the insert in one transaction. It either commits all changes or rolls them all back.",
+        "同时，我会给 source trade ID 和 follower ID 建 UNIQUE constraint，并在 transaction 中使用 row-level lock 或条件更新锁住 follower 行。这样多个 production worker 也能共享同一套保护，而不是各自维护不一致的内存锁。 ｜ I would add a unique constraint on the source trade and follower IDs, and lock or conditionally update the follower row. That makes the protection work across production workers."
       ],
       "visual": ""
     }
