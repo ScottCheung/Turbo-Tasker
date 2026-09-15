@@ -1,34 +1,75 @@
-Design a production-grade backend system for a flash-sale e-commerce platform.
+Task - OPEN UP VS CODE/CURSOR/CLUADE IDE while you run this test. Constnatly TALK While you work throughout this assessment
+You are building part of the backend for a social trading platform.
 
-Users can browse products, add items to their cart, and place orders during a flash sale.
+When a trader opens a trade, the platform attempts to create a corresponding trade for each eligible follower.
 
-Requirements:
+Build a runnable implementation of:
 
-- A flash sale may attract up to 100,000 users at the same time.
-- Product stock is limited and must never be oversold.
-- Users should receive an order response quickly.
-- Payment is handled by an external payment provider.
-- The payment provider may be slow, unavailable, or return a timeout.
-- The same order must not be charged twice.
-- An order should expire if payment is not completed within 10 minutes.
-- If payment succeeds but the order service crashes, the system must recover safely.
-- If payment fails or expires, reserved stock should be released.
-- Users should be able to check order and payment status.
-- The system should support retries without creating duplicate orders or duplicate payments.
-- The service should handle sudden traffic spikes during the flash sale.
-- Order history must remain auditable.
+async function processCopyTrade(
+  trade: Trade,
+  follower: Follower
+): Promise<Result>
 
-Explain:
+A trade contains:
 
-1. Your assumptions and main guarantees.
-2. Your high-level architecture.
-3. How you prevent overselling.
-4. How you reserve and release stock.
-5. How order creation and payment should work.
-6. How you prevent duplicate orders and duplicate charges.
-7. How you handle payment timeouts or unknown payment results.
-8. How expired unpaid orders release inventory.
-9. How the system handles traffic spikes and failures.
-10. Your main scalability and consistency trade-offs.
+type Trade = {
+  id: string;
+  traderId: string;
+  amount: number;
+};
 
-You have approximately 15 minutes to explain your solution.
+A follower contains:
+
+type Follower = {
+  id: string;
+  balance: number;
+  remainingAllocation: number;
+  copyingEnabled: boolean;
+};
+
+A successful copy trade should:
+
+only occur when the follower is eligible;
+deduct the amount from their balance;
+deduct the amount from their remaining allocation;
+record that the follower trade occurred.
+The production system may call your function more than once for the same trade and may call it concurrently.
+
+Your implementation should produce a safe and consistent result.
+
+You may create any additional types, functions, or in-memory storage you need.
+
+Demonstrate
+Before the 15 minutes finishes, run your implementation and show what happens in these three cases.
+
+1. Normal
+Balance:              10,000
+Remaining allocation: 2,000
+Trade amount:            700
+
+2. Same trade twice
+The same trade is sent to the same follower twice.
+
+Show the final balance, allocation, and recorded trades.
+
+3. Concurrent trades
+The follower has:
+
+Balance:              1,000
+Remaining allocation: 1,000
+
+Two different trades for 700 each are processed at approximately the same time.
+
+Show the final state.
+
+Finish
+In the final couple of minutes, walk us through:
+
+what you built;
+why you believe it behaves correctly;
+what your demonstration proves;
+and what you would change if this were backed by PostgreSQL and multiple production workers.
+You do not need production-ready code.
+
+AI can write some or all of your solution. We are assessing what you are able to build, verify, understand and explain within the 15 minutes.
+

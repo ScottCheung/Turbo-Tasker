@@ -5,6 +5,21 @@ import { useSectionScrollSync } from "@/components/useSectionScrollSync";
 import { useSyncedSection } from "@/components/useSyncedSection";
 import type { Assessment } from "@/types/assessment";
 
+function splitSpeakingNote(note: string) {
+  const separatorMatch = /\s*[｜|]\s*/.exec(note);
+
+  if (!separatorMatch) {
+    return { chinese: note, english: "" };
+  }
+
+  const separatorIndex = separatorMatch.index;
+
+  return {
+    chinese: note.slice(0, separatorIndex).trim(),
+    english: note.slice(separatorIndex + separatorMatch[0].length).trim()
+  };
+}
+
 export default function SpeakingNotesApp({ assessment }: { assessment: Assessment }) {
   const firstSectionId = assessment.sections[0]?.id ?? "understanding";
   const { activeSection, setActiveSection, externalSection, clearExternalSection, syncReady } = useSyncedSection(firstSectionId);
@@ -68,11 +83,12 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
                 {section.title}
               </h2>
 
-              <ul className="mt-[clamp(2.25rem,6vh,4.5rem)] grid max-w-[820px] gap-y-9">
+              <ul className="mt-[clamp(2.25rem,6vh,4.5rem)] grid max-w-[980px] gap-y-8">
                 {section.speakingNotes.map((note, noteIndex, notes) => {
                   const isFirst = noteIndex === 0;
                   const isLast = noteIndex === notes.length - 1;
                   const label = isFirst ? "Start here" : isLast ? "Transition" : "Explain";
+                  const { chinese, english } = splitSpeakingNote(note);
 
                   return (
                     <li
@@ -87,7 +103,16 @@ export default function SpeakingNotesApp({ assessment }: { assessment: Assessmen
                         <span className="font-mono">{String(noteIndex + 1).padStart(2, "0")}</span>
                         <span>{label}</span>
                       </div>
-                      <p className="text-[clamp(1.16rem,1rem+0.45vw,1.5rem)] leading-[1.75]">{note}</p>
+                      <div className="grid gap-2.5">
+                        <p className="text-[clamp(1.12rem,0.98rem+0.4vw,1.42rem)] leading-[1.6] text-ink">
+                          {chinese}
+                        </p>
+                        {english ? (
+                          <p className="text-[clamp(1rem,0.9rem+0.32vw,1.24rem)] leading-[1.55] text-muted">
+                            {english}
+                          </p>
+                        ) : null}
+                      </div>
                     </li>
                   );
                 })}

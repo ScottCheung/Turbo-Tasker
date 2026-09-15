@@ -28,7 +28,7 @@
 
 * `points`：只用英文
 * `summary`：中英对照，帮助快速理解原题
-* `speakingNotes`：中文解释 + 简单英文 SAY
+* `speakingNotes`：中文解释 + 简单英文，中间只使用 `｜` 分隔
 * `visual`：英文技术名称
 * 不要用复杂英语表现专业度
 
@@ -238,13 +238,15 @@ Speaking Notes 是最重要的救场内容。
 
 每一条必须严格使用：
 
-`中文理解：<完整中文解释> | SAY: <可以直接说的简单英文>`
+`<完整中文解释> ｜ <可以直接说的简单英文>`
+
+中文和英文之间只保留一个 `｜` 分隔符。
 
 不要只写关键词。
 
 不要只写：
 
-`中文理解：检查 duplicate request`
+`检查 duplicate request`
 
 必须解释：
 
@@ -254,7 +256,7 @@ Speaking Notes 是最重要的救场内容。
 
 例如：
 
-`中文理解：用户可能因为网络问题重复提交同一个订单，所以 API 要用 clientRequestId 判断是不是同一次请求，避免创建两个订单。 | SAY: I use a client request ID to prevent duplicate orders.`
+`用户可能因为网络问题重复提交同一个订单，所以 API 要用 clientRequestId 判断是不是同一次请求，避免创建两个订单。 ｜ I use a client request ID to prevent duplicate orders.`
 
 ---
 
@@ -274,7 +276,7 @@ Speaking Notes 是最重要的救场内容。
 * 为什么要这样做？
 * 如果不这样做会发生什么？
 
-英文 SAY：
+英文：
 
 * 尽量 6–14 个词
 * 简单口语
@@ -304,7 +306,7 @@ Speaking Notes 要按照真实讲话顺序。
 
 例如：
 
-`中文理解：这一页先从整体架构开始，我会先说明同步和异步处理怎么拆开。 | SAY: I would first separate the synchronous and asynchronous parts.`
+`这一页先从整体架构开始，我会先说明同步和异步处理怎么拆开。 ｜ I would first separate the synchronous and asynchronous parts.`
 
 ---
 
@@ -324,7 +326,7 @@ Speaking Notes 要按照真实讲话顺序。
 
 例如：
 
-`中文理解：Transactional outbox 的意思是 order 和待发送的 event 在同一个 DB transaction 里保存，这样不会出现订单写成功但消息丢失。 | SAY: I save the order and event in the same transaction.`
+`Transactional outbox 的意思是 order 和待发送的 event 在同一个 DB transaction 里保存，这样不会出现订单写成功但消息丢失。 ｜ I save the order and event in the same transaction.`
 
 不要假设候选人已经理解这些词。
 
@@ -373,7 +375,6 @@ Speaking Notes 要按照真实讲话顺序。
 * 使用 `flowchart`
 * 使用英文 label
 * 可以使用 `subgraph`
-* 通常 8–15 个关键节点
 * 展示 main path
 * 展示 async path
 * 展示重要 recovery path
@@ -468,9 +469,9 @@ Speaking Notes 要按照真实讲话顺序。
 * 5 个 slide 完全固定
 * `points` 全部是英文
 * `summary` 是中英对照
-* 每条 speakingNotes 都同时有中文解释和 SAY
+* 每条 speakingNotes 都同时有中文解释和简单英文，中间使用 `｜` 分隔
 * 中文解释足够让我重新理解技术点
-* SAY 足够简单，可以直接说
+* 英文足够简单，可以直接说
 * 没有难懂的高级英文句子
 * 技术方案仍然达到 production-minded level
 * Mermaid 不过度简化
